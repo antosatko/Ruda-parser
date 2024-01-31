@@ -125,9 +125,15 @@ impl<'a> Lexer<'a> {
 
             // Match text until next whitespace/token/eof
             let mut j = 0;
-            while i + j < chars.len() {
+            'word: while i + j < chars.len() {
                 if chars[i + j].is_whitespace() {
                     break;
+                }
+                for token_kind in &self.token_kinds {
+                    // FIXME: A loooooot of unnecessary allocations
+                    if chars[i + j..].starts_with(&token_kind.chars().collect::<Vec<char>>()) {
+                        break 'word;
+                    }
                 }
                 j += 1;
             }

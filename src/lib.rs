@@ -1,11 +1,11 @@
 pub mod lexer;
-pub mod parser;
+pub mod grammar;
 pub mod preprocesor;
 
 pub struct Parser<'a> {
     text: &'a str,
     pub lexer: lexer::Lexer<'a>,
-    pub parser: parser::Parser<'a>,
+    pub grammar: grammar::Grammar<'a>,
 }
 
 impl<'a> Parser<'a> {
@@ -14,14 +14,14 @@ impl<'a> Parser<'a> {
         Parser {
             text,
             lexer: lexer::Lexer::new(text),
-            parser: parser::Parser::new(text),
+            grammar: grammar::Grammar::new(text),
         }
     }
 
     pub fn set_text(&mut self, text: &'a str) {
         self.text = text;
         self.lexer.text = text;
-        self.parser.text = text;
+        self.grammar.text = text;
     }
 }
 
@@ -31,7 +31,7 @@ mod tests {
 
     use crate::lexer::TokenKinds;
 
-    use self::parser::{Parameters, Rule, VariableKind};
+    use self::grammar::{Parameters, Rule, VariableKind};
 
     use super::*;
 
@@ -101,50 +101,111 @@ mod tests {
     #[test]
     fn rules() {
         let mut parser = Parser::new();
-        parser.set_text("fun");
+        parser.set_text("let a=1+60;");
         parser.lexer.add_token("=".to_string());
         parser.lexer.add_token(";".to_string());
         parser.lexer.add_token(":".to_string());
+        parser.lexer.add_token("+".to_string());
+        parser.lexer.add_token("-".to_string());
+        parser.lexer.add_token("*".to_string());
+        parser.lexer.add_token("/".to_string());
+
+        let tokens = parser.lexer.lex();
+
+        assert_eq!(dbg!(tokens).len(), 9);
+
 
         let mut variables = HashMap::new();
         variables.insert("ident".to_string(), VariableKind::Node);
         variables.insert("type".to_string(), VariableKind::Node);
         variables.insert("value".to_string(), VariableKind::Node);
 
-        parser.parser.nodes.insert(
+        parser.grammar.enumerators.insert(
+            "operators".to_string(),
+            grammar::Enumerator {
+                name: "operators".to_string(),
+                values: vec![
+                    grammar::MatchToken::Token(TokenKinds::Token("+".to_string())),
+                    grammar::MatchToken::Token(TokenKinds::Token("-".to_string())),
+                    grammar::MatchToken::Token(TokenKinds::Token("*".to_string())),
+                    grammar::MatchToken::Token(TokenKinds::Token("/".to_string())),
+                ],
+            },
+        );
+
+        parser.grammar.nodes.insert(
             "KWLet".to_string(),
-            parser::Node {
+            grammar::Node {
                 name: "KWLet".to_string(),
                 rules: vec![
-                    parser::Rule::Is {
-                        token: parser::MatchToken::Word("Let".to_string()),
+                    // detect the keyword
+                    grammar::Rule::Is {
+                        token: grammar::MatchToken::Word("Let".to_string()),
                         rules: vec![],
                         parameters: vec![Parameters::HardError(true)],
                     },
-                    parser::Rule::Is {
-                        token: parser::MatchToken::Token(TokenKinds::Text),
+                    // detect the ident
+                    grammar::Rule::Is {
+                        token: grammar::MatchToken::Token(TokenKinds::Text),
                         rules: vec![],
                         parameters: vec![Parameters::Set("ident".to_string())],
                     },
-                    parser::Rule::Maybe {
-                        token: parser::MatchToken::Token(TokenKinds::Token(":".to_string())),
-                        is: vec![parser::Rule::Is {
-                            token: parser::MatchToken::Token(TokenKinds::Text),
+                    // detect the type if it exists
+                    grammar::Rule::Maybe {
+                        token: grammar::MatchToken::Token(TokenKinds::Token(":".to_string())),
+                        is: vec![grammar::Rule::Is {
+                            token: grammar::MatchToken::Token(TokenKinds::Text),
                             rules: vec![],
                             parameters: vec![Parameters::Set("type".to_string())],
                         }],
                         isnt: vec![],
                         parameters: vec![],
                     },
-                    parser::Rule::Maybe {
-                        token: parser::MatchToken::Token(TokenKinds::Text),
-                        is: vec![parser::Rule::Is {
-                            token: parser::MatchToken::Token(TokenKinds::Text),
+                    // detect the value if it exists
+                    grammar::Rule::Maybe {
+                        token: grammar::MatchToken::Token(TokenKinds::Token("=".to_string())),
+                        is: vec![grammar::Rule::Is {
+                            token: grammar::MatchToken::Node("value".to_string()),
                             rules: vec![],
                             parameters: vec![Parameters::Set("value".to_string())],
                         }],
                         isnt: vec![],
                         parameters: vec![],
+                    },
+                    // consume the semicolon (optional)
+                    grammar::Rule::Maybe {
+                        token: grammar::MatchToken::Token(TokenKinds::Token(";".to_string())),
+                        is: vec![],
+                        isnt: vec![],
+                        parameters: vec![],
+                    },
+                ],
+                variables,
+            },
+        );
+        let mut variables = HashMap::new();
+        variables.insert("nodes".to_string(), VariableKind::NodeList);
+        parser.grammar.nodes.insert(
+            "value".to_string(),
+            grammar::Node {
+                name: "value".to_string(),
+                rules: vec![
+                    // detect the value[0]
+                    grammar::Rule::Is {
+                        token: grammar::MatchToken::Token(TokenKinds::Text),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("nodes".to_string())],
+                    },
+                    // detect the operator
+                    grammar::Rule::While {
+                        token: grammar::MatchToken::Enumerator("operator".to_string()),
+                        // detect the value[n]
+                        rules: vec![grammar::Rule::Is {
+                            token: grammar::MatchToken::Token(TokenKinds::Text),
+                            rules: vec![],
+                            parameters: vec![Parameters::Set("nodes".to_string())],
+                        }],
+                        parameters: vec![Parameters::Set("nodes".to_string())],
                     },
                 ],
                 variables,
