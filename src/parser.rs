@@ -9,9 +9,9 @@ pub struct Parser<'a> {
 }
 
 impl <'a> Parser<'a> {
-    pub fn new() -> Parser<'static> {
+    pub fn new(text: &'a str) -> Parser<'a> {
         Parser {
-            text: "",
+            text,
             nodes: HashMap::new(),
             globals: HashMap::new(),
         }
@@ -89,9 +89,6 @@ pub enum Rule {
     /// The command will be executed without matching a token
     Command {
         command: Commands,
-        /// Optional rules that will be executed if the command is executed 
-        /// if the command allows it
-        rules: Rules,
     },
 }
 
@@ -111,6 +108,9 @@ pub enum Commands {
     /// Returns an error from node
     Error {
         message: String,
+    },
+    HardError {
+        set: bool,
     }
 }
 
@@ -138,6 +138,8 @@ pub enum MatchToken {
     Token(TokenKinds),
     /// A node name
     Node(String),
+    /// A constant word
+    Word(String),
 }
 
 /// A node is a collection of rules that will be executed when the node is matched

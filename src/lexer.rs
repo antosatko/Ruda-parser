@@ -42,10 +42,10 @@ pub struct TextLocation {
     pub column: usize,
 }
 
-impl Lexer<'_> {
-    pub fn new() -> Lexer<'static> {
+impl<'a> Lexer<'a> {
+    pub fn new(text: &'a str) -> Lexer<'a> {
         Lexer {
-            text: "",
+            text,
             token_kinds: Vec::new(),
             tokens: Vec::new(),
         }
