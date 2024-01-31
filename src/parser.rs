@@ -70,6 +70,17 @@ pub enum Rule {
         /// Parameters that can be used if the token is matched
         parameters: Vec<Parameters>,
     },
+    /// Matches one of the tokens
+    /// 
+    /// If one of the tokens is matched, the rules will be executed
+    /// 
+    /// If none of the tokens is matched, the rules for the else branch will be executed
+    MaybeOneOf {
+        /// Tokens that will be matched
+        is_one_of: Vec<(MatchToken, Rules, Vec<Parameters>)>,
+        /// Rules that will be executed if none of the tokens is matched
+        isnt: Rules,
+    },
     /// Matches a token
     /// 
     /// If the token is matched, the rules will be executed
@@ -140,6 +151,8 @@ pub enum MatchToken {
     Node(String),
     /// A constant word
     Word(String),
+    /// An enumerator
+    Enumerator(String),
 }
 
 /// A node is a collection of rules that will be executed when the node is matched
@@ -189,4 +202,9 @@ pub enum Parameters {
     /// 
     /// This is useful for using nodes in optional rules
     HardError(bool),
+}
+
+pub struct Enumerator {
+    pub name: String,
+    pub values: Vec<MatchToken>,
 }
