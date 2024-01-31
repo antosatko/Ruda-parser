@@ -1,20 +1,25 @@
 pub mod lexer;
 pub mod grammar;
 pub mod preprocesor;
+pub mod parser;
 
 pub struct Parser<'a> {
     text: &'a str,
     pub lexer: lexer::Lexer<'a>,
     pub grammar: grammar::Grammar<'a>,
+    pub parser: parser::Parser<'a>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new() -> Parser<'static> {
         let text = "";
+        let lexer = lexer::Lexer::new(text);
+        let grammar = grammar::Grammar::new(text);
         Parser {
             text,
-            lexer: lexer::Lexer::new(text),
-            grammar: grammar::Grammar::new(text),
+            lexer,
+            grammar,
+            parser: parser::Parser::new(text),
         }
     }
 
@@ -23,15 +28,19 @@ impl<'a> Parser<'a> {
         self.lexer.text = text;
         self.grammar.text = text;
     }
+
+    pub fn parse(&mut self) -> Result<parser::ParseResult, parser::ParseError> {
+        self.parser.parse(&self.grammar, &self.lexer)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, hash::Hash, vec};
+    use std::{collections::HashMap, vec};
 
     use crate::lexer::TokenKinds;
 
-    use self::grammar::{Parameters, Rule, VariableKind};
+    use self::grammar::{Parameters, VariableKind};
 
     use super::*;
 
@@ -112,7 +121,7 @@ mod tests {
 
         let tokens = parser.lexer.lex();
 
-        assert_eq!(dbg!(tokens).len(), 9);
+        assert_eq!(tokens.len(), 9);
 
 
         let mut variables = HashMap::new();
@@ -211,5 +220,8 @@ mod tests {
                 variables,
             },
         );
+
+        parser.parser.entry = String::from("KWLet");
+        let result = parser.parse().unwrap();
     }
 }
