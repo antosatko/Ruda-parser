@@ -44,6 +44,17 @@ pub struct TextLocation {
     pub column: usize,
 }
 
+impl TextLocation {
+    pub fn new(line: usize, column: usize) -> TextLocation {
+        let line = line + 1;
+        let column = column + 1;
+        TextLocation {
+            line,
+            column,
+        }
+    }
+}
+
 impl<'a> Lexer<'a> {
     pub fn new(text: &'a str) -> Lexer<'a> {
         Lexer {
@@ -79,10 +90,7 @@ impl<'a> Lexer<'a> {
                 tokens.push(Token {
                     index: i,
                     len: 1,
-                    location: TextLocation {
-                        line: line,
-                        column: column,
-                    },
+                    location: TextLocation::new(line, column),
                     kind: TokenKinds::Control(ControlTokenKind::Eol),
                 });
                 continue;
@@ -98,10 +106,7 @@ impl<'a> Lexer<'a> {
                         tokens.push(Token {
                             index: i,
                             len: j + 1,
-                            location: TextLocation {
-                                line,
-                                column,
-                            },
+                            location: TextLocation::new(line, column),
                             kind: TokenKinds::Token(token.to_string()),
                         });
                         i += j + 1;
@@ -117,7 +122,7 @@ impl<'a> Lexer<'a> {
                 tokens.push(Token {
                     index: i,
                     len: 1,
-                    location: TextLocation { line, column },
+                    location: TextLocation::new(line, column),
                     kind: TokenKinds::Whitespace,
                 });
                 i += 1;
@@ -142,7 +147,7 @@ impl<'a> Lexer<'a> {
             tokens.push(Token {
                 index: i,
                 len: j,
-                location: TextLocation { line, column },
+                location: TextLocation::new(line, column),
                 kind: TokenKinds::Text,
             });
             column += j;
@@ -151,7 +156,7 @@ impl<'a> Lexer<'a> {
         tokens.push(Token {
             index: i,
             len: 0,
-            location: TextLocation { line, column },
+            location: TextLocation::new(line, column),
             kind: TokenKinds::Control(ControlTokenKind::Eof),
         });
         tokens

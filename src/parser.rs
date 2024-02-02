@@ -29,7 +29,14 @@ impl<'a> Parser<'a> {
         grammar: &Grammar,
         lexer: &Lexer,
     ) -> Result<ParseResult, ParseError> {
-        println!("{:?}", lexer.tokens.iter().map(|t| t.kind.clone()).collect::<Vec<TokenKinds>>());
+        println!(
+            "{:?}",
+            lexer
+                .tokens
+                .iter()
+                .map(|t| t.kind.clone())
+                .collect::<Vec<TokenKinds>>()
+        );
         let mut cursor = Cursor { idx: 0 };
         let mut globals = Node::variables_from_grammar(&grammar.globals)?;
         let entry = self.parse_node(grammar, lexer, &self.entry, &mut cursor, &mut globals)?;
@@ -50,14 +57,24 @@ impl<'a> Parser<'a> {
         globals: &mut HashMap<String, VariableKind>,
     ) -> Result<Node, ParseError> {
         let mut node = Node::from_grammar(grammar, name)?;
+        node.first_token_idx = cursor.idx;
         // In case the node fails to parse, we want to restore the cursor to its original position
         let cursor_clone = cursor.clone();
         let rules = match grammar.nodes.get(name) {
             Some(node) => &node.rules,
             None => return Err(ParseError::NodeNotFound(name.to_string())),
         };
-        self.parse_rules(grammar, lexer, rules, cursor, globals, &cursor_clone, &mut node)?;
+        self.parse_rules(
+            grammar,
+            lexer,
+            rules,
+            cursor,
+            globals,
+            &cursor_clone,
+            &mut node,
+        )?;
         cursor.idx -= 2;
+        node.last_token_idx = cursor.idx;
 
         Ok(node)
     }
@@ -82,11 +99,28 @@ impl<'a> Parser<'a> {
                     parameters,
                 } => {
                     match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
-                        TokenCompare::Is => {
-                            // parameters go here
+                        TokenCompare::Is(val) => {
+                            self.parse_parameters(
+                                grammar,
+                                lexer,
+                                parameters,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                                val,
+                            )?;
                             if rules.len() > 0 {
                                 cursor.idx += 1;
-                                self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?;
+                                self.parse_rules(
+                                    grammar,
+                                    lexer,
+                                    rules,
+                                    cursor,
+                                    globals,
+                                    cursor_clone,
+                                    node,
+                                )?;
                             }
                         }
                         TokenCompare::IsNot(err) => {
@@ -100,11 +134,23 @@ impl<'a> Parser<'a> {
                     parameters,
                 } => {
                     match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
-                        TokenCompare::Is => {
-                            err(ParseError::ExpectedToNotBe(lexer.tokens[cursor.idx].kind.clone()), cursor, cursor_clone)?;
+                        TokenCompare::Is(_) => {
+                            err(
+                                ParseError::ExpectedToNotBe(lexer.tokens[cursor.idx].kind.clone()),
+                                cursor,
+                                cursor_clone,
+                            )?;
                         }
                         TokenCompare::IsNot(_) => {
-                            self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?;
+                            self.parse_rules(
+                                grammar,
+                                lexer,
+                                rules,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                            )?;
                         }
                     }
                 }
@@ -112,22 +158,50 @@ impl<'a> Parser<'a> {
                     let mut found = false;
                     for (token, rules, parameters) in tokens {
                         use TokenCompare::*;
-                        match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
-                            Is => {
+                        match self.match_token(
+                            grammar,
+                            lexer,
+                            token,
+                            cursor,
+                            globals,
+                            cursor_clone,
+                        )? {
+                            Is(val) => {
                                 cursor.idx += 1;
                                 found = true;
-                                // parameters go here
-                                self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?;
+                                self.parse_parameters(
+                                    grammar,
+                                    lexer,
+                                    parameters,
+                                    cursor,
+                                    globals,
+                                    cursor_clone,
+                                    node,
+                                    val,
+                                )?;
+                                self.parse_rules(
+                                    grammar,
+                                    lexer,
+                                    rules,
+                                    cursor,
+                                    globals,
+                                    cursor_clone,
+                                    node,
+                                )?;
                                 break;
                             }
                             IsNot(_) => {}
                         }
                     }
                     if !found {
-                        err(ParseError::ExpectedToken {
-                            expected: TokenKinds::Text,
-                            found: lexer.tokens[cursor.idx].kind.clone(),
-                        }, cursor, cursor_clone)?;
+                        err(
+                            ParseError::ExpectedToken {
+                                expected: TokenKinds::Text,
+                                found: lexer.tokens[cursor.idx].kind.clone(),
+                            },
+                            cursor,
+                            cursor_clone,
+                        )?;
                     }
                 }
                 grammar::Rule::Maybe {
@@ -139,17 +213,42 @@ impl<'a> Parser<'a> {
                     println!("//maybe//");
                     use TokenCompare::*;
                     match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
-                        Is => {
-                            // parameters go here
+                        Is(val) => {
+                            self.parse_parameters(
+                                grammar,
+                                lexer,
+                                parameters,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                                val,
+                            )?;
                             println!("--------");
                             cursor.idx += 1;
-                            self.parse_rules(grammar, lexer, is, cursor, globals, cursor_clone, node)?;
+                            self.parse_rules(
+                                grammar,
+                                lexer,
+                                is,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                            )?;
                         }
                         IsNot(err) => {
                             if isnt.len() == 0 {
                                 cursor.idx -= 1;
-                            }else {
-                                self.parse_rules(grammar, lexer, isnt, cursor, globals, cursor_clone, node)?;
+                            } else {
+                                self.parse_rules(
+                                    grammar,
+                                    lexer,
+                                    isnt,
+                                    cursor,
+                                    globals,
+                                    cursor_clone,
+                                    node,
+                                )?;
                             }
                         }
                     }
@@ -161,9 +260,19 @@ impl<'a> Parser<'a> {
                     parameters,
                 } => {
                     println!("//while//");
-                    while let TokenCompare::Is = self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
+                    while let TokenCompare::Is(val) =
+                        self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)?
+                    {
                         cursor.idx += 1;
-                        self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?;
+                        self.parse_rules(
+                            grammar,
+                            lexer,
+                            rules,
+                            cursor,
+                            globals,
+                            cursor_clone,
+                            node,
+                        )?;
                     }
                     cursor.idx -= 1;
                 }
@@ -195,15 +304,16 @@ impl<'a> Parser<'a> {
                 println!("{:?}", lexer.stringify(current_token));
                 if *tok != current_token.kind {
                     return Ok(TokenCompare::IsNot(ParseError::ExpectedToken {
-                                            expected: tok.clone(),
-                                            found: current_token.kind.clone(),
-                                        }));
+                        expected: tok.clone(),
+                        found: current_token.kind.clone(),
+                    }));
                 }
+                return Ok(TokenCompare::Is(Nodes::Token(current_token.clone())));
             }
             grammar::MatchToken::Node(node_name) => {
                 println!("--{:?}--", node_name);
                 let node = match self.parse_node(grammar, lexer, node_name, cursor, globals) {
-                    Ok(node) => node,
+                    Ok(node) => return Ok(TokenCompare::Is(Nodes::Node(node))),
                     Err(err) => return Ok(TokenCompare::IsNot(err)),
                 };
             }
@@ -218,16 +328,17 @@ impl<'a> Parser<'a> {
                 if let TokenKinds::Text = current_token.kind {
                     if word != &lexer.stringify(&current_token) {
                         return Ok(TokenCompare::IsNot(ParseError::ExpectedToken {
-                                                    expected: TokenKinds::Text,
-                                                    found: current_token.kind.clone(),
-                                                }));
+                            expected: TokenKinds::Text,
+                            found: current_token.kind.clone(),
+                        }));
                     }
                 } else {
                     return Ok(TokenCompare::IsNot(ParseError::ExpectedWord {
-                                            expected: word.clone(),
-                                            found: current_token.kind.clone(),
-                                        }));
+                        expected: word.clone(),
+                        found: current_token.kind.clone(),
+                    }));
                 }
+                return Ok(TokenCompare::Is(Nodes::Token(current_token.clone())));
             }
             grammar::MatchToken::Enumerator(enumerator) => {
                 println!("--{:?}--", enumerator);
@@ -241,26 +352,75 @@ impl<'a> Parser<'a> {
                     current_token = &lexer.tokens[cursor.idx];
                 }
                 println!("{:?}", lexer.tokens[cursor.idx].kind);
-                let mut i = 0; 
+                let mut i = 0;
                 let token = loop {
                     if i >= enumerator.values.len() {
-                        return Ok(TokenCompare::IsNot(ParseError::EnumeratorNotFound(enumerator.name.clone())));
+                        return Ok(TokenCompare::IsNot(ParseError::EnumeratorNotFound(
+                            enumerator.name.clone(),
+                        )));
                     }
                     let token = &enumerator.values[i];
-                    if let TokenCompare::Is = self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
-                        break token;
+                    if let TokenCompare::Is(val) =
+                        self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)?
+                    {
+                        break val;
                     }
                     i += 1;
                 };
-
+                return Ok(TokenCompare::Is(token));
             }
         }
-        Ok(TokenCompare::Is)
+    }
+
+    fn parse_parameters(
+        &self,
+        grammar: &Grammar,
+        lexer: &Lexer,
+        parameters: &Vec<grammar::Parameters>,
+        cursor: &mut Cursor,
+        globals: &mut HashMap<String, VariableKind>,
+        cursor_clone: &Cursor,
+        node: &mut Node,
+        value: Nodes,
+    ) -> Result<(), ParseError> {
+        for parameter in parameters {
+            match parameter {
+                grammar::Parameters::HardError(value) => {}
+                grammar::Parameters::Set(name) => {
+                    let kind = match node.variables.get_mut(name) {
+                        Some(kind) => kind,
+                        None => return Err(ParseError::NodeNotFound(name.to_string())),
+                    };
+                    let kind = match kind {
+                        VariableKind::Node(single) => {
+                            *single = Some(value.clone());
+                        }
+                        VariableKind::NodeList(list) => {
+                            list.push(value.clone());
+                        }
+                        VariableKind::Boolean(value) => {
+                            *value = true;
+                        }
+                        VariableKind::Count(value) => {
+                            *value += 1;
+                        }
+                        VariableKind::Number(_) => todo!(),
+                    };
+                }
+                grammar::Parameters::Print(str) => println!("{}", str),
+                grammar::Parameters::Debug(_) => todo!(),
+                grammar::Parameters::Count(_) => todo!(),
+                grammar::Parameters::Back(_) => todo!(),
+                grammar::Parameters::Global(_) => todo!(),
+                grammar::Parameters::Return => todo!(),
+            }
+        }
+        Ok(())
     }
 }
 
 enum TokenCompare {
-    Is,
+    Is(Nodes),
     IsNot(ParseError),
 }
 
@@ -271,16 +431,18 @@ pub struct ParseResult<'a> {
     pub text: &'a str,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Nodes {
     Node(Node),
     Token(Token),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     name: String,
     variables: HashMap<String, VariableKind>,
+    first_token_idx: usize,
+    last_token_idx: usize,
 }
 
 impl Node {
@@ -288,6 +450,8 @@ impl Node {
         Node {
             name,
             variables: HashMap::new(),
+            first_token_idx: 0,
+            last_token_idx: 0,
         }
     }
 
@@ -324,7 +488,7 @@ fn err(error: ParseError, cursor: &mut Cursor, cursor_clone: &Cursor) -> Result<
     Err(error)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VariableKind {
     Node(Option<Nodes>),
     NodeList(Vec<Nodes>),
@@ -344,10 +508,7 @@ pub enum ParseError {
         found: TokenKinds,
     },
     /// Expected a word, found a token
-    ExpectedWord {
-        expected: String,
-        found: TokenKinds,
-    },
+    ExpectedWord { expected: String, found: TokenKinds },
     /// Enumerator not found - Developer error
     EnumeratorNotFound(String),
     /// Expected to not be

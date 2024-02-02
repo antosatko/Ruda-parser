@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn rules() {
         let mut parser = Parser::new();
-        parser.set_text("let  a=  1+60;");
+        parser.set_text("let   danda=  1+60;");
         parser.lexer.add_token("=".to_string());
         parser.lexer.add_token(";".to_string());
         parser.lexer.add_token(":".to_string());
