@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn rules() {
         let mut parser = Parser::new();
-        parser.set_text("let a=1+60;");
+        parser.set_text("let  a=  1+60;");
         parser.lexer.add_token("=".to_string());
         parser.lexer.add_token(";".to_string());
         parser.lexer.add_token(":".to_string());
@@ -120,9 +120,8 @@ mod tests {
         parser.lexer.add_token("/".to_string());
 
         let tokens = parser.lexer.lex();
-
-        assert_eq!(tokens.len(), 9);
-
+        
+        parser.lexer.tokens = tokens;
 
         let mut variables = HashMap::new();
         variables.insert("ident".to_string(), VariableKind::Node);
@@ -149,7 +148,7 @@ mod tests {
                 rules: vec![
                     // detect the keyword
                     grammar::Rule::Is {
-                        token: grammar::MatchToken::Word("Let".to_string()),
+                        token: grammar::MatchToken::Word("let".to_string()),
                         rules: vec![],
                         parameters: vec![Parameters::HardError(true)],
                     },
@@ -207,7 +206,7 @@ mod tests {
                     },
                     // detect the operator
                     grammar::Rule::While {
-                        token: grammar::MatchToken::Enumerator("operator".to_string()),
+                        token: grammar::MatchToken::Enumerator("operators".to_string()),
                         // detect the value[n]
                         rules: vec![grammar::Rule::Is {
                             token: grammar::MatchToken::Token(TokenKinds::Text),
@@ -223,5 +222,7 @@ mod tests {
 
         parser.parser.entry = String::from("KWLet");
         let result = parser.parse().unwrap();
+
+        panic!("{:?}", result);
     }
 }

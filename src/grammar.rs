@@ -144,6 +144,7 @@ pub enum Comparison {
 /// A token that will be matched
 ///
 /// Can be a token kind or a node name
+#[derive(Clone, Debug)]
 pub enum MatchToken {
     /// A token kind
     Token(TokenKinds),

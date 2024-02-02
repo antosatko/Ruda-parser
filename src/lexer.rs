@@ -175,4 +175,8 @@ impl<'a> Lexer<'a> {
         }
         self.text[start..end].to_string()
     }
+
+    pub fn stringify(&self, token: &Token) -> String {
+        self.text[token.index..token.index + token.len].to_string()
+    }
 }
