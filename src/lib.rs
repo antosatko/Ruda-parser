@@ -1,7 +1,7 @@
-pub mod lexer;
 pub mod grammar;
-pub mod preprocesor;
+pub mod lexer;
 pub mod parser;
+pub mod preprocesor;
 
 pub struct Parser<'a> {
     text: &'a str,
@@ -29,7 +29,7 @@ impl<'a> Parser<'a> {
         self.grammar.text = text;
     }
 
-    pub fn parse(&mut self) -> Result<parser::ParseResult, parser::ParseError> {
+    pub fn parse(&mut self) -> Result<parser::ParseResult, (parser::ParseError, bool)> {
         self.parser.parse(&self.grammar, &self.lexer)
     }
 }
@@ -120,7 +120,7 @@ mod tests {
         parser.lexer.add_token("/".to_string());
 
         let tokens = parser.lexer.lex();
-        
+
         parser.lexer.tokens = tokens;
 
         let mut variables = HashMap::new();

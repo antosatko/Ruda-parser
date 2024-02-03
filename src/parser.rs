@@ -28,7 +28,7 @@ impl<'a> Parser<'a> {
         &self,
         grammar: &Grammar,
         lexer: &Lexer,
-    ) -> Result<ParseResult, ParseError> {
+    ) -> Result<ParseResult, (ParseError, bool)> {
         println!(
             "{:?}",
             lexer
@@ -55,14 +55,14 @@ impl<'a> Parser<'a> {
         name: &str,
         cursor: &mut Cursor,
         globals: &mut HashMap<String, VariableKind>,
-    ) -> Result<Node, ParseError> {
+    ) -> Result<Node, (ParseError, bool)> {
         let mut node = Node::from_grammar(grammar, name)?;
         node.first_token_idx = cursor.idx;
         // In case the node fails to parse, we want to restore the cursor to its original position
         let cursor_clone = cursor.clone();
         let rules = match grammar.nodes.get(name) {
             Some(node) => &node.rules,
-            None => return Err(ParseError::NodeNotFound(name.to_string())),
+            None => return Err((ParseError::NodeNotFound(name.to_string()), node.harderror)),
         };
         self.parse_rules(
             grammar,
@@ -73,7 +73,7 @@ impl<'a> Parser<'a> {
             &cursor_clone,
             &mut node,
         )?;
-        cursor.idx -= 2;
+        cursor.idx -= 1;
         node.last_token_idx = cursor.idx;
 
         Ok(node)
@@ -88,7 +88,7 @@ impl<'a> Parser<'a> {
         globals: &mut HashMap<String, VariableKind>,
         cursor_clone: &Cursor,
         node: &mut Node,
-    ) -> Result<(), ParseError> {
+    ) -> Result<(), (ParseError, bool)> {
         let mut i = 0;
         while i < rules.len() {
             let rule = &rules[i];
@@ -98,7 +98,15 @@ impl<'a> Parser<'a> {
                     rules,
                     parameters,
                 } => {
-                    match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
+                    match self.match_token(
+                        grammar,
+                        lexer,
+                        token,
+                        cursor,
+                        globals,
+                        cursor_clone,
+                        node,
+                    )? {
                         TokenCompare::Is(val) => {
                             self.parse_parameters(
                                 grammar,
@@ -110,18 +118,16 @@ impl<'a> Parser<'a> {
                                 node,
                                 val,
                             )?;
-                            if rules.len() > 0 {
-                                cursor.idx += 1;
-                                self.parse_rules(
-                                    grammar,
-                                    lexer,
-                                    rules,
-                                    cursor,
-                                    globals,
-                                    cursor_clone,
-                                    node,
-                                )?;
-                            }
+                            cursor.idx += 1;
+                            self.parse_rules(
+                                grammar,
+                                lexer,
+                                rules,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                            )?;
                         }
                         TokenCompare::IsNot(err) => {
                             return Err(err);
@@ -133,12 +139,21 @@ impl<'a> Parser<'a> {
                     rules,
                     parameters,
                 } => {
-                    match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
+                    match self.match_token(
+                        grammar,
+                        lexer,
+                        token,
+                        cursor,
+                        globals,
+                        cursor_clone,
+                        node,
+                    )? {
                         TokenCompare::Is(_) => {
                             err(
                                 ParseError::ExpectedToNotBe(lexer.tokens[cursor.idx].kind.clone()),
                                 cursor,
                                 cursor_clone,
+                                node,
                             )?;
                         }
                         TokenCompare::IsNot(_) => {
@@ -165,9 +180,9 @@ impl<'a> Parser<'a> {
                             cursor,
                             globals,
                             cursor_clone,
+                            node,
                         )? {
                             Is(val) => {
-                                cursor.idx += 1;
                                 found = true;
                                 self.parse_parameters(
                                     grammar,
@@ -179,6 +194,7 @@ impl<'a> Parser<'a> {
                                     node,
                                     val,
                                 )?;
+                                cursor.idx += 1;
                                 self.parse_rules(
                                     grammar,
                                     lexer,
@@ -201,6 +217,7 @@ impl<'a> Parser<'a> {
                             },
                             cursor,
                             cursor_clone,
+                            node,
                         )?;
                     }
                 }
@@ -212,7 +229,15 @@ impl<'a> Parser<'a> {
                 } => {
                     println!("//maybe//");
                     use TokenCompare::*;
-                    match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
+                    match self.match_token(
+                        grammar,
+                        lexer,
+                        token,
+                        cursor,
+                        globals,
+                        cursor_clone,
+                        node,
+                    )? {
                         Is(val) => {
                             self.parse_parameters(
                                 grammar,
@@ -237,32 +262,86 @@ impl<'a> Parser<'a> {
                             )?;
                         }
                         IsNot(err) => {
-                            if isnt.len() == 0 {
-                                cursor.idx -= 1;
-                            } else {
+                            self.parse_rules(
+                                grammar,
+                                lexer,
+                                isnt,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                            )?;
+                        }
+                    }
+                }
+                grammar::Rule::MaybeOneOf { is_one_of, isnt } => {
+                    println!("//maybe one of//");
+                    let mut found = false;
+                    for (token, rules, parameters) in is_one_of {
+                        use TokenCompare::*;
+                        match self.match_token(
+                            grammar,
+                            lexer,
+                            token,
+                            cursor,
+                            globals,
+                            cursor_clone,
+                            node,
+                        )? {
+                            Is(val) => {
+                                found = true;
+                                self.parse_parameters(
+                                    grammar,
+                                    lexer,
+                                    parameters,
+                                    cursor,
+                                    globals,
+                                    cursor_clone,
+                                    node,
+                                    val,
+                                )?;
+                                cursor.idx += 1;
                                 self.parse_rules(
                                     grammar,
                                     lexer,
-                                    isnt,
+                                    rules,
                                     cursor,
                                     globals,
                                     cursor_clone,
                                     node,
                                 )?;
+                                break;
                             }
+                            IsNot(_) => {}
                         }
                     }
+                    if !found {
+                        self.parse_rules(
+                            grammar,
+                            lexer,
+                            isnt,
+                            cursor,
+                            globals,
+                            cursor_clone,
+                            node,
+                        )?;
+                    }
                 }
-                grammar::Rule::MaybeOneOf { is_one_of, isnt } => todo!(),
                 grammar::Rule::While {
                     token,
                     rules,
                     parameters,
                 } => {
                     println!("//while//");
-                    while let TokenCompare::Is(val) =
-                        self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)?
-                    {
+                    while let TokenCompare::Is(val) = self.match_token(
+                        grammar,
+                        lexer,
+                        token,
+                        cursor,
+                        globals,
+                        cursor_clone,
+                        node,
+                    )? {
                         cursor.idx += 1;
                         self.parse_rules(
                             grammar,
@@ -274,12 +353,10 @@ impl<'a> Parser<'a> {
                             node,
                         )?;
                     }
-                    cursor.idx -= 1;
                 }
                 grammar::Rule::Command { command } => todo!(),
             }
             i += 1;
-            cursor.idx += 1;
         }
         Ok(())
     }
@@ -292,7 +369,8 @@ impl<'a> Parser<'a> {
         cursor: &mut Cursor,
         globals: &mut HashMap<String, VariableKind>,
         cursor_clone: &Cursor,
-    ) -> Result<TokenCompare, ParseError> {
+        node: &mut Node,
+    ) -> Result<TokenCompare, (ParseError, bool)> {
         match token {
             grammar::MatchToken::Token(tok) => {
                 let mut current_token = &lexer.tokens[cursor.idx];
@@ -303,10 +381,13 @@ impl<'a> Parser<'a> {
                 println!("{:?}", token);
                 println!("{:?}", lexer.stringify(current_token));
                 if *tok != current_token.kind {
-                    return Ok(TokenCompare::IsNot(ParseError::ExpectedToken {
-                        expected: tok.clone(),
-                        found: current_token.kind.clone(),
-                    }));
+                    return Ok(TokenCompare::IsNot((
+                        ParseError::ExpectedToken {
+                            expected: tok.clone(),
+                            found: current_token.kind.clone(),
+                        },
+                        node.harderror,
+                    )));
                 }
                 return Ok(TokenCompare::Is(Nodes::Token(current_token.clone())));
             }
@@ -327,16 +408,22 @@ impl<'a> Parser<'a> {
                 println!("{:?}", lexer.stringify(current_token));
                 if let TokenKinds::Text = current_token.kind {
                     if word != &lexer.stringify(&current_token) {
-                        return Ok(TokenCompare::IsNot(ParseError::ExpectedToken {
-                            expected: TokenKinds::Text,
-                            found: current_token.kind.clone(),
-                        }));
+                        return Ok(TokenCompare::IsNot((
+                            ParseError::ExpectedToken {
+                                expected: TokenKinds::Text,
+                                found: current_token.kind.clone(),
+                            },
+                            node.harderror,
+                        )));
                     }
                 } else {
-                    return Ok(TokenCompare::IsNot(ParseError::ExpectedWord {
-                        expected: word.clone(),
-                        found: current_token.kind.clone(),
-                    }));
+                    return Ok(TokenCompare::IsNot((
+                        ParseError::ExpectedWord {
+                            expected: word.clone(),
+                            found: current_token.kind.clone(),
+                        },
+                        node.harderror,
+                    )));
                 }
                 return Ok(TokenCompare::Is(Nodes::Token(current_token.clone())));
             }
@@ -344,7 +431,12 @@ impl<'a> Parser<'a> {
                 println!("--{:?}--", enumerator);
                 let enumerator = match grammar.enumerators.get(enumerator) {
                     Some(enumerator) => enumerator,
-                    None => return Err(ParseError::EnumeratorNotFound(enumerator.to_string())),
+                    None => {
+                        return Err((
+                            ParseError::EnumeratorNotFound(enumerator.to_string()),
+                            node.harderror,
+                        ))
+                    }
                 };
                 let mut current_token = &lexer.tokens[cursor.idx];
                 while current_token.kind == TokenKinds::Whitespace {
@@ -355,14 +447,21 @@ impl<'a> Parser<'a> {
                 let mut i = 0;
                 let token = loop {
                     if i >= enumerator.values.len() {
-                        return Ok(TokenCompare::IsNot(ParseError::EnumeratorNotFound(
-                            enumerator.name.clone(),
+                        return Ok(TokenCompare::IsNot((
+                            ParseError::EnumeratorNotFound(enumerator.name.clone()),
+                            node.harderror,
                         )));
                     }
                     let token = &enumerator.values[i];
-                    if let TokenCompare::Is(val) =
-                        self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)?
-                    {
+                    if let TokenCompare::Is(val) = self.match_token(
+                        grammar,
+                        lexer,
+                        token,
+                        cursor,
+                        globals,
+                        cursor_clone,
+                        node,
+                    )? {
                         break val;
                     }
                     i += 1;
@@ -382,14 +481,18 @@ impl<'a> Parser<'a> {
         cursor_clone: &Cursor,
         node: &mut Node,
         value: Nodes,
-    ) -> Result<(), ParseError> {
+    ) -> Result<(), (ParseError, bool)> {
         for parameter in parameters {
             match parameter {
-                grammar::Parameters::HardError(value) => {}
                 grammar::Parameters::Set(name) => {
                     let kind = match node.variables.get_mut(name) {
                         Some(kind) => kind,
-                        None => return Err(ParseError::NodeNotFound(name.to_string())),
+                        None => {
+                            return Err((
+                                ParseError::VariableNotFound(name.to_string()),
+                                node.harderror,
+                            ))
+                        }
                     };
                     let kind = match kind {
                         VariableKind::Node(single) => {
@@ -398,20 +501,211 @@ impl<'a> Parser<'a> {
                         VariableKind::NodeList(list) => {
                             list.push(value.clone());
                         }
-                        VariableKind::Boolean(value) => {
-                            *value = true;
-                        }
-                        VariableKind::Count(value) => {
-                            *value += 1;
-                        }
-                        VariableKind::Number(_) => todo!(),
+                        VariableKind::Boolean(_) => Err((
+                            ParseError::CannotSetVariable(name.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::Count(_) => Err((
+                            ParseError::CannotSetVariable(name.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::Number(_) => Err((
+                            ParseError::CannotSetVariable(name.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
                     };
                 }
                 grammar::Parameters::Print(str) => println!("{}", str),
-                grammar::Parameters::Debug(_) => todo!(),
-                grammar::Parameters::Count(_) => todo!(),
+                grammar::Parameters::Debug(variable) => match variable {
+                    Some(ident) => {
+                        let kind = match node.variables.get(ident) {
+                            Some(kind) => kind,
+                            None => {
+                                return Err((
+                                    ParseError::VariableNotFound(ident.to_string()),
+                                    node.harderror,
+                                ))
+                            }
+                        };
+                        println!("{:?}", kind);
+                    }
+                    None => {
+                        println!("{:?}", lexer.stringify(&lexer.tokens[cursor.idx]));
+                    }
+                },
+                grammar::Parameters::Count(ident) => {
+                    let kind = match node.variables.get_mut(ident) {
+                        Some(kind) => kind,
+                        None => {
+                            return Err((
+                                ParseError::VariableNotFound(ident.to_string()),
+                                node.harderror,
+                            ))
+                        }
+                    };
+                    match kind {
+                        VariableKind::Node(_) => Err((
+                            ParseError::UncountableVariable(ident.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::NodeList(_) => Err((
+                            ParseError::UncountableVariable(ident.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::Boolean(_) => Err((
+                            ParseError::UncountableVariable(ident.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::Count(val) => {
+                            *val += 1;
+                        }
+                        VariableKind::Number(val) => {
+                            *val += 1;
+                        }
+                    };
+                }
+                grammar::Parameters::True(variable) => {
+                    let kind = match node.variables.get_mut(variable) {
+                        Some(kind) => kind,
+                        None => {
+                            return Err((
+                                ParseError::VariableNotFound(variable.to_string()),
+                                node.harderror,
+                            ))
+                        }
+                    };
+                    if let VariableKind::Boolean(val) = kind {
+                        *val = true;
+                    } else {
+                        return Err((
+                            ParseError::UncountableVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ));
+                    }
+                }
+                grammar::Parameters::False(variable) => {
+                    let kind = match node.variables.get_mut(variable) {
+                        Some(kind) => kind,
+                        None => {
+                            return Err((
+                                ParseError::VariableNotFound(variable.to_string()),
+                                node.harderror,
+                            ))
+                        }
+                    };
+                    if let VariableKind::Boolean(val) = kind {
+                        *val = false;
+                    } else {
+                        return Err((
+                            ParseError::UncountableVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ));
+                    }
+                }
+                grammar::Parameters::Global(variable) => {
+                    let kind = match globals.get_mut(variable) {
+                        Some(kind) => kind,
+                        None => {
+                            return Err((
+                                ParseError::VariableNotFound(variable.to_string()),
+                                node.harderror,
+                            ))
+                        }
+                    };
+                    match kind {
+                        VariableKind::Node(single) => {
+                            *single = Some(value.clone());
+                        }
+                        VariableKind::NodeList(list) => {
+                            list.push(value.clone());
+                        }
+                        VariableKind::Boolean(_) => Err((
+                            ParseError::CannotSetVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::Count(_) => Err((
+                            ParseError::CannotSetVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::Number(_) => Err((
+                            ParseError::CannotSetVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                    };
+                }
+                grammar::Parameters::CountGlobal(variable) => {
+                    let kind = match globals.get_mut(variable) {
+                        Some(kind) => kind,
+                        None => {
+                            return Err((
+                                ParseError::VariableNotFound(variable.to_string()),
+                                node.harderror,
+                            ))
+                        }
+                    };
+                    match kind {
+                        VariableKind::Node(_) => Err((
+                            ParseError::UncountableVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::NodeList(_) => Err((
+                            ParseError::UncountableVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::Boolean(_) => Err((
+                            ParseError::UncountableVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ))?,
+                        VariableKind::Count(val) => {
+                            *val += 1;
+                        }
+                        VariableKind::Number(val) => {
+                            *val += 1;
+                        }
+                    };
+                }
+                grammar::Parameters::TrueGlobal(variable) => {
+                    let kind = match globals.get_mut(variable) {
+                        Some(kind) => kind,
+                        None => {
+                            return Err((
+                                ParseError::VariableNotFound(variable.to_string()),
+                                node.harderror,
+                            ))
+                        }
+                    };
+                    if let VariableKind::Boolean(val) = kind {
+                        *val = true;
+                    } else {
+                        return Err((
+                            ParseError::UncountableVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ));
+                    }
+                }
+                grammar::Parameters::FalseGlobal(variable) => {
+                    let kind = match globals.get_mut(variable) {
+                        Some(kind) => kind,
+                        None => {
+                            return Err((
+                                ParseError::VariableNotFound(variable.to_string()),
+                                node.harderror,
+                            ))
+                        }
+                    };
+                    if let VariableKind::Boolean(val) = kind {
+                        *val = false;
+                    } else {
+                        return Err((
+                            ParseError::UncountableVariable(variable.to_string(), kind.clone()),
+                            node.harderror,
+                        ));
+                    }
+                }
+                grammar::Parameters::HardError(value) => {
+                    node.harderror = *value;
+                }
                 grammar::Parameters::Back(_) => todo!(),
-                grammar::Parameters::Global(_) => todo!(),
                 grammar::Parameters::Return => todo!(),
             }
         }
@@ -421,7 +715,7 @@ impl<'a> Parser<'a> {
 
 enum TokenCompare {
     Is(Nodes),
-    IsNot(ParseError),
+    IsNot((ParseError, bool)),
 }
 
 #[derive(Debug)]
@@ -443,6 +737,7 @@ pub struct Node {
     variables: HashMap<String, VariableKind>,
     first_token_idx: usize,
     last_token_idx: usize,
+    harderror: bool,
 }
 
 impl Node {
@@ -452,13 +747,14 @@ impl Node {
             variables: HashMap::new(),
             first_token_idx: 0,
             last_token_idx: 0,
+            harderror: false,
         }
     }
 
-    pub fn from_grammar(grammar: &Grammar, name: &str) -> Result<Node, ParseError> {
+    pub fn from_grammar(grammar: &Grammar, name: &str) -> Result<Node, (ParseError, bool)> {
         let found = match grammar.nodes.get(name) {
             Some(node) => node,
-            None => return Err(ParseError::NodeNotFound(name.to_string())),
+            None => return Err((ParseError::NodeNotFound(name.to_string()), false)),
         };
         let mut node = Node::new(found.name.clone());
         node.variables = Self::variables_from_grammar(&found.variables)?;
@@ -467,7 +763,7 @@ impl Node {
 
     pub fn variables_from_grammar(
         variables: &HashMap<String, grammar::VariableKind>,
-    ) -> Result<HashMap<String, VariableKind>, ParseError> {
+    ) -> Result<HashMap<String, VariableKind>, (ParseError, bool)> {
         let mut result = HashMap::new();
         for (key, value) in variables {
             let var = match value {
@@ -483,9 +779,14 @@ impl Node {
     }
 }
 
-fn err(error: ParseError, cursor: &mut Cursor, cursor_clone: &Cursor) -> Result<(), ParseError> {
+fn err(
+    error: ParseError,
+    cursor: &mut Cursor,
+    cursor_clone: &Cursor,
+    node: &Node,
+) -> Result<(), (ParseError, bool)> {
     *cursor = cursor_clone.clone();
-    Err(error)
+    Err((error, node.harderror))
 }
 
 #[derive(Debug, Clone)]
@@ -508,11 +809,19 @@ pub enum ParseError {
         found: TokenKinds,
     },
     /// Expected a word, found a token
-    ExpectedWord { expected: String, found: TokenKinds },
+    ExpectedWord {
+        expected: String,
+        found: TokenKinds,
+    },
     /// Enumerator not found - Developer error
     EnumeratorNotFound(String),
     /// Expected to not be
     ExpectedToNotBe(TokenKinds),
+    /// Variable not found - Developer error
+    VariableNotFound(String),
+    /// Uncountable variable - Developer error
+    UncountableVariable(String, VariableKind),
+    CannotSetVariable(String, VariableKind),
 }
 
 impl std::fmt::Debug for ParseError {
@@ -528,6 +837,13 @@ impl std::fmt::Debug for ParseError {
             }
             ParseError::EnumeratorNotFound(name) => write!(f, "Enumerator not found: {}", name),
             ParseError::ExpectedToNotBe(kind) => write!(f, "Expected to not be {:?}", kind),
+            ParseError::VariableNotFound(name) => write!(f, "Variable not found: {}", name),
+            ParseError::UncountableVariable(name, kind) => {
+                write!(f, "Uncountable variable: {}<{:?}>", name, kind)
+            }
+            ParseError::CannotSetVariable(name, kind) => {
+                write!(f, "Cannot set variable: {}<{:?}>", name, kind)
+            }
         }
     }
 }

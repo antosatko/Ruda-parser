@@ -184,16 +184,26 @@ pub enum VariableKind {
 pub enum Parameters {
     /// Sets a variable to a value
     Set(String),
+    /// Sets a global variable to a value
+    Global(String),
+    /// Adds 1 to a variable of type Count
+    Count(String),
+    /// Adds 1 to a global variable of type Count
+    CountGlobal(String),
+    /// Sets a variable to true
+    True(String),
+    /// Sets a variable to false
+    False(String),
+    /// Sets a global variable to true
+    TrueGlobal(String),
+    /// Sets a global variable to false
+    FalseGlobal(String),
     /// Prints string
     Print(String),
     /// Prints current token or variable
     Debug(Option<String>),
-    /// Adds 1 to a variable of type Count
-    Count(String),
     /// Goes back in rules
     Back(u8),
-    /// Sets a global variable to a value
-    Global(String),
     /// Returns from node
     Return,
     /// If the node ends with an error, it will be a hard error
