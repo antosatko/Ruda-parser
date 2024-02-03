@@ -183,8 +183,6 @@ pub enum VariableKind {
     Boolean,
     /// Holds a number
     Number,
-    /// Can be used to count the number of times a rule is matched
-    Count,
 }
 
 /// Parameters that can be used on a rule if it is matched

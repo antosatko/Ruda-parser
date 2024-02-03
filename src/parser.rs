@@ -339,7 +339,11 @@ impl<'a> Parser<'a> {
                         )?;
                     }
                 }
-                grammar::Rule::Until { token, rules, parameters } => {
+                grammar::Rule::Until {
+                    token,
+                    rules,
+                    parameters,
+                } => {
                     // search for the token and execute the rules when the token is found
                     println!("//until//");
                     while let TokenCompare::IsNot(_) =
@@ -360,27 +364,26 @@ impl<'a> Parser<'a> {
                         node,
                         Nodes::Token(lexer.tokens[cursor.idx].clone()),
                     )?;
-                    self.parse_rules(
-                        grammar,
-                        lexer,
-                        rules,
-                        cursor,
-                        globals,
-                        cursor_clone,
-                        node,
-                    )?;
+                    self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?;
                 }
                 grammar::Rule::Command { command } => {
                     println!("//command//");
                     match command {
-                        grammar::Commands::Compare { left, right, comparison, rules } => {
+                        grammar::Commands::Compare {
+                            left,
+                            right,
+                            comparison,
+                            rules,
+                        } => {
                             let left = match node.variables.get(left) {
                                 Some(kind) => kind,
                                 None => return Err(ParseError::VariableNotFound(left.to_string())),
                             };
                             let right = match node.variables.get(right) {
                                 Some(kind) => kind,
-                                None => return Err(ParseError::VariableNotFound(right.to_string())),
+                                None => {
+                                    return Err(ParseError::VariableNotFound(right.to_string()))
+                                }
                             };
                             let comparisons = match left {
                                 VariableKind::Node(node_left) => {
@@ -389,14 +392,17 @@ impl<'a> Parser<'a> {
                                             (Some(Nodes::Node(left)), Some(Nodes::Node(right))) => {
                                                 if left.name == right.name {
                                                     vec![grammar::Comparison::Equal]
-                                                }else {
+                                                } else {
                                                     vec![grammar::Comparison::NotEqual]
                                                 }
                                             }
-                                            (Some(Nodes::Token(left)), Some(Nodes::Token(right))) => {
+                                            (
+                                                Some(Nodes::Token(left)),
+                                                Some(Nodes::Token(right)),
+                                            ) => {
                                                 if left == right {
                                                     vec![grammar::Comparison::Equal]
-                                                }else {
+                                                } else {
                                                     vec![grammar::Comparison::NotEqual]
                                                 }
                                             }
@@ -410,16 +416,16 @@ impl<'a> Parser<'a> {
                                     } else {
                                         vec![grammar::Comparison::NotEqual]
                                     }
-                                },
+                                }
                                 VariableKind::NodeList(_) => vec![grammar::Comparison::NotEqual],
                                 VariableKind::Boolean(left) => {
                                     if let VariableKind::Boolean(right) = right {
                                         if *left == *right {
                                             vec![grammar::Comparison::Equal]
-                                        }else {
+                                        } else {
                                             vec![grammar::Comparison::NotEqual]
                                         }
-                                    }else {
+                                    } else {
                                         vec![grammar::Comparison::NotEqual]
                                     }
                                 }
@@ -430,11 +436,12 @@ impl<'a> Parser<'a> {
                                             result.push(grammar::Comparison::Equal);
                                             result.push(grammar::Comparison::GreaterThanOrEqual);
                                             result.push(grammar::Comparison::LessThanOrEqual);
-                                        }else {
+                                        } else {
                                             result.push(grammar::Comparison::NotEqual);
                                             if *left > *right {
                                                 result.push(grammar::Comparison::GreaterThan);
-                                                result.push(grammar::Comparison::GreaterThanOrEqual);
+                                                result
+                                                    .push(grammar::Comparison::GreaterThanOrEqual);
                                             }
                                             if *left < *right {
                                                 result.push(grammar::Comparison::LessThan);
@@ -442,18 +449,7 @@ impl<'a> Parser<'a> {
                                             }
                                         }
                                         result
-                                    }else {
-                                        vec![grammar::Comparison::NotEqual]
-                                    }
-                                }
-                                VariableKind::Count(left) => {
-                                    if let VariableKind::Count(right) = right {
-                                        if *left == *right {
-                                            vec![grammar::Comparison::Equal]
-                                        }else {
-                                            vec![grammar::Comparison::NotEqual]
-                                        }
-                                    }else {
+                                    } else {
                                         vec![grammar::Comparison::NotEqual]
                                     }
                                 }
@@ -469,11 +465,13 @@ impl<'a> Parser<'a> {
                                     node,
                                 )?;
                             }
-                        },
-                        grammar::Commands::Error { message } => Err(ParseError::Message(message.to_string()))?,
+                        }
+                        grammar::Commands::Error { message } => {
+                            Err(ParseError::Message(message.to_string()))?
+                        }
                         grammar::Commands::HardError { set } => {
                             node.harderror = *set;
-                        },
+                        }
                     }
                 }
             }
@@ -598,24 +596,27 @@ impl<'a> Parser<'a> {
                         VariableKind::NodeList(list) => {
                             list.push(value.clone());
                         }
-                        VariableKind::Boolean(_) => Err(ParseError::CannotSetVariable(name.to_string(), kind.clone()))?,
-                        VariableKind::Count(_) => Err(ParseError::CannotSetVariable(name.to_string(), kind.clone()))?,
-                        VariableKind::Number(_) => Err(ParseError::CannotSetVariable(name.to_string(), kind.clone()))?
+                        VariableKind::Boolean(_) => Err(ParseError::CannotSetVariable(
+                            name.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::Number(_) => Err(ParseError::CannotSetVariable(
+                            name.to_string(),
+                            kind.clone(),
+                        ))?,
                     };
                 }
                 grammar::Parameters::Print(str) => println!("{}", str),
-                grammar::Parameters::Debug(variable) => {
-                    match variable {
-                        Some(ident) => {
-                            let kind = match node.variables.get(ident) {
-                                Some(kind) => kind,
-                                None => return Err(ParseError::VariableNotFound(ident.to_string())),
-                            };
-                            println!("{:?}", kind);
-                        }
-                        None => {
-                            println!("{:?}", lexer.stringify(&lexer.tokens[cursor.idx]));
-                        }
+                grammar::Parameters::Debug(variable) => match variable {
+                    Some(ident) => {
+                        let kind = match node.variables.get(ident) {
+                            Some(kind) => kind,
+                            None => return Err(ParseError::VariableNotFound(ident.to_string())),
+                        };
+                        println!("{:?}", kind);
+                    }
+                    None => {
+                        println!("{:?}", lexer.stringify(&lexer.tokens[cursor.idx]));
                     }
                 },
                 grammar::Parameters::Count(ident) => {
@@ -624,12 +625,18 @@ impl<'a> Parser<'a> {
                         None => return Err(ParseError::VariableNotFound(ident.to_string())),
                     };
                     match kind {
-                        VariableKind::Node(_) => Err(ParseError::UncountableVariable(ident.to_string(), kind.clone()))?,
-                        VariableKind::NodeList(_) => Err(ParseError::UncountableVariable(ident.to_string(), kind.clone()))?,
-                        VariableKind::Boolean(_) => Err(ParseError::UncountableVariable(ident.to_string(), kind.clone()))?,
-                        VariableKind::Count(val) => {
-                            *val += 1;
-                        }
+                        VariableKind::Node(_) => Err(ParseError::UncountableVariable(
+                            ident.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::NodeList(_) => Err(ParseError::UncountableVariable(
+                            ident.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::Boolean(_) => Err(ParseError::UncountableVariable(
+                            ident.to_string(),
+                            kind.clone(),
+                        ))?,
                         VariableKind::Number(val) => {
                             *val += 1;
                         }
@@ -643,7 +650,10 @@ impl<'a> Parser<'a> {
                     if let VariableKind::Boolean(val) = kind {
                         *val = true;
                     } else {
-                        return Err(ParseError::UncountableVariable(variable.to_string(), kind.clone()));
+                        return Err(ParseError::UncountableVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ));
                     }
                 }
                 grammar::Parameters::False(variable) => {
@@ -654,7 +664,10 @@ impl<'a> Parser<'a> {
                     if let VariableKind::Boolean(val) = kind {
                         *val = false;
                     } else {
-                        return Err(ParseError::UncountableVariable(variable.to_string(), kind.clone()));
+                        return Err(ParseError::UncountableVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ));
                     }
                 }
                 grammar::Parameters::Global(variable) => {
@@ -669,9 +682,14 @@ impl<'a> Parser<'a> {
                         VariableKind::NodeList(list) => {
                             list.push(value.clone());
                         }
-                        VariableKind::Boolean(_) => Err(ParseError::CannotSetVariable(variable.to_string(), kind.clone()))?,
-                        VariableKind::Count(_) => Err(ParseError::CannotSetVariable(variable.to_string(), kind.clone()))?,
-                        VariableKind::Number(_) => Err(ParseError::CannotSetVariable(variable.to_string(), kind.clone()))?
+                        VariableKind::Boolean(_) => Err(ParseError::CannotSetVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::Number(_) => Err(ParseError::CannotSetVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ))?,
                     };
                 }
                 grammar::Parameters::CountGlobal(variable) => {
@@ -680,12 +698,18 @@ impl<'a> Parser<'a> {
                         None => return Err(ParseError::VariableNotFound(variable.to_string())),
                     };
                     match kind {
-                        VariableKind::Node(_) => Err(ParseError::UncountableVariable(variable.to_string(), kind.clone()))?,
-                        VariableKind::NodeList(_) => Err(ParseError::UncountableVariable(variable.to_string(), kind.clone()))?,
-                        VariableKind::Boolean(_) => Err(ParseError::UncountableVariable(variable.to_string(), kind.clone()))?,
-                        VariableKind::Count(val) => {
-                            *val += 1;
-                        }
+                        VariableKind::Node(_) => Err(ParseError::UncountableVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::NodeList(_) => Err(ParseError::UncountableVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::Boolean(_) => Err(ParseError::UncountableVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ))?,
                         VariableKind::Number(val) => {
                             *val += 1;
                         }
@@ -699,7 +723,10 @@ impl<'a> Parser<'a> {
                     if let VariableKind::Boolean(val) = kind {
                         *val = true;
                     } else {
-                        return Err(ParseError::UncountableVariable(variable.to_string(), kind.clone()));
+                        return Err(ParseError::UncountableVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ));
                     }
                 }
                 grammar::Parameters::FalseGlobal(variable) => {
@@ -710,7 +737,10 @@ impl<'a> Parser<'a> {
                     if let VariableKind::Boolean(val) = kind {
                         *val = false;
                     } else {
-                        return Err(ParseError::UncountableVariable(variable.to_string(), kind.clone()));
+                        return Err(ParseError::UncountableVariable(
+                            variable.to_string(),
+                            kind.clone(),
+                        ));
                     }
                 }
                 grammar::Parameters::HardError(value) => {
@@ -782,7 +812,6 @@ impl Node {
                 crate::grammar::VariableKind::NodeList => VariableKind::NodeList(Vec::new()),
                 crate::grammar::VariableKind::Boolean => VariableKind::Boolean(false),
                 crate::grammar::VariableKind::Number => VariableKind::Number(0),
-                crate::grammar::VariableKind::Count => VariableKind::Count(0),
             };
             result.insert(key.clone(), var);
         }
@@ -801,7 +830,6 @@ pub enum VariableKind {
     NodeList(Vec<Nodes>),
     Boolean(bool),
     Number(i32),
-    Count(i32),
 }
 
 pub enum ParseError {
@@ -846,8 +874,12 @@ impl std::fmt::Debug for ParseError {
             ParseError::EnumeratorNotFound(name) => write!(f, "Enumerator not found: {}", name),
             ParseError::ExpectedToNotBe(kind) => write!(f, "Expected to not be {:?}", kind),
             ParseError::VariableNotFound(name) => write!(f, "Variable not found: {}", name),
-            ParseError::UncountableVariable(name, kind) => write!(f, "Uncountable variable: {}<{:?}>", name, kind),
-            ParseError::CannotSetVariable(name, kind) => write!(f, "Cannot set variable: {}<{:?}>", name, kind),
+            ParseError::UncountableVariable(name, kind) => {
+                write!(f, "Uncountable variable: {}<{:?}>", name, kind)
+            }
+            ParseError::CannotSetVariable(name, kind) => {
+                write!(f, "Cannot set variable: {}<{:?}>", name, kind)
+            }
             ParseError::Message(message) => write!(f, "{}", message),
             ParseError::Eof => write!(f, "Unexpected end of file"),
         }
