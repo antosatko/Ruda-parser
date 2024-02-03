@@ -3,8 +3,8 @@ use std::collections::HashMap;
 const DEFAULT_ENTRY: &str = "entry";
 
 use crate::{
-    grammar::{self, Comparison, Grammar},
-    lexer::{self, Lexer, Token, TokenKinds},
+    grammar::{self, Grammar},
+    lexer::{Lexer, Token, TokenKinds},
 };
 
 pub struct Parser<'a> {
@@ -41,7 +41,7 @@ impl<'a> Parser<'a> {
         let mut globals = Node::variables_from_grammar(&grammar.globals)?;
         let entry = match self.parse_node(grammar, lexer, &self.entry, &mut cursor, &mut globals) {
             Ok(node) => node,
-            Err((err, node)) => return Err(err),
+            Err((err, _)) => return Err(err),
         };
 
         Ok(ParseResult {
@@ -138,7 +138,7 @@ impl<'a> Parser<'a> {
                 grammar::Rule::Isnt {
                     token,
                     rules,
-                    parameters,
+                    parameters: _,
                 } => {
                     match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
                         TokenCompare::Is(_) => {
@@ -243,7 +243,7 @@ impl<'a> Parser<'a> {
                                 node,
                             )?;
                         }
-                        IsNot(err) => {
+                        IsNot(_) => {
                             self.parse_rules(
                                 grammar,
                                 lexer,
@@ -508,7 +508,7 @@ impl<'a> Parser<'a> {
             }
             grammar::MatchToken::Node(node_name) => {
                 println!("--{:?}--", node_name);
-                let node = match self.parse_node(grammar, lexer, node_name, cursor, globals) {
+                match self.parse_node(grammar, lexer, node_name, cursor, globals) {
                     Ok(node) => return Ok(TokenCompare::Is(Nodes::Node(node))),
                     Err((err, node)) => match node.harderror {
                         true => return Err(err),
@@ -573,12 +573,12 @@ impl<'a> Parser<'a> {
 
     fn parse_parameters(
         &self,
-        grammar: &Grammar,
+        _grammar: &Grammar,
         lexer: &Lexer,
         parameters: &Vec<grammar::Parameters>,
         cursor: &mut Cursor,
         globals: &mut HashMap<String, VariableKind>,
-        cursor_clone: &Cursor,
+        _cursor_clone: &Cursor,
         node: &mut Node,
         value: Nodes,
     ) -> Result<(), ParseError> {
@@ -589,7 +589,7 @@ impl<'a> Parser<'a> {
                         Some(kind) => kind,
                         None => return Err(ParseError::VariableNotFound(name.to_string())),
                     };
-                    let kind = match kind {
+                    match kind {
                         VariableKind::Node(single) => {
                             *single = Some(value.clone());
                         }
