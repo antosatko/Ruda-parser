@@ -192,7 +192,9 @@ pub enum Parameters {
     /// Sets a global variable to a value
     Global(String),
     /// Adds 1 to a variable of type Count
-    Count(String),
+    Increment(String),
+    /// Subtracts 1 from a variable of type Count
+    Decrement(String),
     /// Adds 1 to a global variable of type Count
     CountGlobal(String),
     /// Sets a variable to true

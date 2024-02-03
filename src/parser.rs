@@ -619,7 +619,7 @@ impl<'a> Parser<'a> {
                         println!("{:?}", lexer.stringify(&lexer.tokens[cursor.idx]));
                     }
                 },
-                grammar::Parameters::Count(ident) => {
+                grammar::Parameters::Increment(ident) => {
                     let kind = match node.variables.get_mut(ident) {
                         Some(kind) => kind,
                         None => return Err(ParseError::VariableNotFound(ident.to_string())),
@@ -639,6 +639,29 @@ impl<'a> Parser<'a> {
                         ))?,
                         VariableKind::Number(val) => {
                             *val += 1;
+                        }
+                    };
+                }
+                grammar::Parameters::Decrement(ident) => {
+                    let kind = match node.variables.get_mut(ident) {
+                        Some(kind) => kind,
+                        None => return Err(ParseError::VariableNotFound(ident.to_string())),
+                    };
+                    match kind {
+                        VariableKind::Node(_) => Err(ParseError::UncountableVariable(
+                            ident.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::NodeList(_) => Err(ParseError::UncountableVariable(
+                            ident.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::Boolean(_) => Err(ParseError::UncountableVariable(
+                            ident.to_string(),
+                            kind.clone(),
+                        ))?,
+                        VariableKind::Number(val) => {
+                            *val -= 1;
                         }
                     };
                 }
@@ -886,7 +909,7 @@ impl std::fmt::Debug for ParseError {
     }
 }
 
-/// A cursor is used to keep track of the current position in the token stream and other useful information
+/// A cursor is used to keep track of the current position in the token stream and other useful information (no useful information yet)
 #[derive(Clone)]
 struct Cursor {
     /// Current index in the token stream
