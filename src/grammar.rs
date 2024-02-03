@@ -97,6 +97,12 @@ pub enum Rule {
         /// The parameters will be used once every time the token is matched
         parameters: Vec<Parameters>,
     },
+    /// Searches in the tokens until a token is matched
+    Until {
+        token: MatchToken,
+        rules: Rules,
+        parameters: Vec<Parameters>,
+    },
     /// Performs a command
     ///
     /// The command will be executed without matching a token
@@ -126,6 +132,7 @@ pub enum Commands {
 }
 
 /// Comparison operators
+#[derive(Clone, Debug, PartialEq)]
 pub enum Comparison {
     /// ==
     Equal,

@@ -29,7 +29,7 @@ impl<'a> Parser<'a> {
         self.grammar.text = text;
     }
 
-    pub fn parse(&mut self) -> Result<parser::ParseResult, (parser::ParseError, bool)> {
+    pub fn parse(&mut self) -> Result<parser::ParseResult, parser::ParseError> {
         self.parser.parse(&self.grammar, &self.lexer)
     }
 }
