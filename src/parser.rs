@@ -63,7 +63,7 @@ impl<'a> Parser<'a> {
             Ok(node) => node,
             Err(err) => return Err((err, Node::new(name.to_string()))),
         };
-        node.first_token_idx = cursor.idx;
+        node.first_string_idx = lexer.tokens[cursor.idx].index;
         // In case the node fails to parse, we want to restore the cursor to its original position
         let cursor_clone = cursor.clone();
         let rules = match grammar.nodes.get(name) {
@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
             Err(err) => return Err((err, node)),
         }
         cursor.idx -= 1;
-        node.last_token_idx = cursor.idx;
+        node.last_string_idx = lexer.tokens[cursor.idx].index + lexer.tokens[cursor.idx].len;
 
         Ok(node)
     }
@@ -354,6 +354,7 @@ impl<'a> Parser<'a> {
                             return Err(ParseError::Eof);
                         }
                     }
+                    cursor.idx += 1;
                     self.parse_parameters(
                         grammar,
                         lexer,
@@ -472,6 +473,25 @@ impl<'a> Parser<'a> {
                         grammar::Commands::HardError { set } => {
                             node.harderror = *set;
                         }
+                        grammar::Commands::Goto { label } => {
+                            let mut j = 0;
+                            loop {
+                                if j >= rules.len() {
+                                    return Err(ParseError::LabelNotFound(label.to_string()));
+                                }
+                                match &rules[j] {
+                                    grammar::Rule::Command { command: grammar::Commands::Label { name } } => {
+                                        if name == label {
+                                            cursor.idx = j;
+                                            break;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                                j += 1;
+                            }
+                        }
+                        grammar::Commands::Label { .. } => {},
                     }
                 }
             }
@@ -492,7 +512,7 @@ impl<'a> Parser<'a> {
         match token {
             grammar::MatchToken::Token(tok) => {
                 let mut current_token = &lexer.tokens[cursor.idx];
-                while current_token.kind == TokenKinds::Whitespace {
+                while current_token.kind == TokenKinds::Whitespace || current_token.kind == TokenKinds::Control(crate::lexer::ControlTokenKind::Eol) {
                     cursor.idx += 1;
                     current_token = &lexer.tokens[cursor.idx];
                 }
@@ -771,6 +791,7 @@ impl<'a> Parser<'a> {
                 }
                 grammar::Parameters::Back(_) => todo!(),
                 grammar::Parameters::Return => todo!(),
+                grammar::Parameters::Goto(_) => todo!(),
             }
         }
         Ok(())
@@ -789,6 +810,12 @@ pub struct ParseResult<'a> {
     pub text: &'a str,
 }
 
+impl <'a>ParseResult<'a> {
+    pub fn node_to_string(&self, node: &Node) -> String {
+        self.text[node.first_string_idx..node.last_string_idx].to_string()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Nodes {
     Node(Node),
@@ -797,10 +824,10 @@ pub enum Nodes {
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    name: String,
-    variables: HashMap<String, VariableKind>,
-    first_token_idx: usize,
-    last_token_idx: usize,
+    pub name: String,
+    pub variables: HashMap<String, VariableKind>,
+    first_string_idx: usize,
+    last_string_idx: usize,
     harderror: bool,
 }
 
@@ -809,8 +836,8 @@ impl Node {
         Node {
             name,
             variables: HashMap::new(),
-            first_token_idx: 0,
-            last_token_idx: 0,
+            first_string_idx: 0,
+            last_string_idx: 0,
             harderror: false,
         }
     }
@@ -881,6 +908,8 @@ pub enum ParseError {
     Message(String),
     /// Unexpected end of file
     Eof,
+    /// Label not found - Developer error
+    LabelNotFound(String),
 }
 
 impl std::fmt::Debug for ParseError {
@@ -905,6 +934,7 @@ impl std::fmt::Debug for ParseError {
             }
             ParseError::Message(message) => write!(f, "{}", message),
             ParseError::Eof => write!(f, "Unexpected end of file"),
+            ParseError::LabelNotFound(name) => write!(f, "Label not found: {}", name),
         }
     }
 }

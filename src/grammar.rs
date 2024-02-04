@@ -129,6 +129,12 @@ pub enum Commands {
     HardError {
         set: bool,
     },
+    Goto {
+        label: String,
+    },
+    Label {
+        name: String,
+    },
 }
 
 /// Comparison operators
@@ -220,6 +226,8 @@ pub enum Parameters {
     ///
     /// This is useful for using nodes in optional rules
     HardError(bool),
+    /// Sets the current node to the label with the given name
+    Goto(String),
 }
 
 pub struct Enumerator {

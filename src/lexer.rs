@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TokenKinds {
     /// A sequence of characters
@@ -74,14 +76,14 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn lex(&mut self) -> Vec<Token> {
-        let chars = self.text.chars().collect::<Vec<char>>();
+        let chars = self.text.char_indices().collect::<Vec<(usize, char)>>();
         let mut tokens = Vec::new();
         let mut i = 0;
         let mut line = 0;
         let mut column = 0;
         'chars: while i < chars.len() {
             // Take new line into account
-            if chars[i] == '\n' {
+            if chars[i].1 == '\n' {
                 line += 1;
                 column = 0;
                 i += 1;
@@ -97,9 +99,17 @@ impl<'a> Lexer<'a> {
             // Match token kinds
             for token_kind in &self.token_kinds {
                 let mut token;
-                let mut j = 0;
+                let mut j: usize = 0;
                 while i + j < chars.len() {
-                    token = &self.text[i..i + j + 1];
+                    //token = &self.text[i..i + j + 1];
+                    println!("{:?}", chars);
+                    let start = chars[i].0;
+                    let end = if i + j + 1 < chars.len() {
+                        chars[i + j + 1].0
+                    } else {
+                        chars[i + j].0 + chars[i + j].1.len_utf8()
+                    };
+                    token = &self.text[start..end];
                     if token == *token_kind {
                         tokens.push(Token {
                             index: i,
@@ -116,7 +126,7 @@ impl<'a> Lexer<'a> {
             }
 
             // Match whitespace
-            if chars[i].is_whitespace() {
+            if chars[i].1.is_whitespace() {
                 tokens.push(Token {
                     index: i,
                     len: 1,
@@ -131,12 +141,12 @@ impl<'a> Lexer<'a> {
             // Match text until next whitespace/token/eof
             let mut j = 0;
             'word: while i + j < chars.len() {
-                if chars[i + j].is_whitespace() {
+                if chars[i + j].1.is_whitespace() {
                     break;
                 }
                 for token_kind in &self.token_kinds {
                     // FIXME: A loooooot of unnecessary allocations
-                    if chars[i + j..].starts_with(&token_kind.chars().collect::<Vec<char>>()) {
+                    if chars[i + j..].iter().map(|(_, char)| *char).collect::<Vec<char>>().starts_with(&token_kind.chars().collect::<Vec<char>>()) {
                         break 'word;
                     }
                 }

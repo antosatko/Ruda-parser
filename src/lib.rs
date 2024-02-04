@@ -27,6 +27,7 @@ impl<'a> Parser<'a> {
         self.text = text;
         self.lexer.text = text;
         self.grammar.text = text;
+        self.parser.text = text;
     }
 
     pub fn parse(&mut self) -> Result<parser::ParseResult, parser::ParseError> {
@@ -221,8 +222,68 @@ mod tests {
         );
 
         parser.parser.entry = String::from("KWLet");
+        parser.parse().unwrap();
+    }
+
+    #[test]
+    fn string() {
+        let str = r#"
+"úťf-8 string"
+"second string"
+"#;
+
+        let mut parser = Parser::new();
+        parser.set_text(str);
+        parser.lexer.add_token("\"".to_string());
+
+        let tokens = parser.lexer.lex();
+        parser.lexer.tokens = tokens;
+
+        let mut variables = HashMap::new();
+        variables.insert("start".to_string(), VariableKind::Node);
+        variables.insert("end".to_string(), VariableKind::Node);
+        parser.grammar.nodes.insert(
+            "string".to_string(),
+            grammar::Node {
+                name: "string".to_string(),
+                rules: vec![
+                    // detect the start
+                    grammar::Rule::Is {
+                        token: grammar::MatchToken::Token(TokenKinds::Token("\"".to_string())),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("start".to_string())],
+                    },
+                    grammar::Rule::Until {
+                        token: grammar::MatchToken::Token(TokenKinds::Token("\"".to_string())),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("end".to_string())],
+                    },
+                ],
+                variables,
+            },
+        );
+        parser.parser.entry = String::from("string");
+
         let result = parser.parse().unwrap();
 
-        panic!("{:?}", result);
+        assert_eq!(result.node_to_string(&result.entry), "\"úťf-8 string\"");
+    }
+
+    #[test]
+    fn vec_char_eq() {
+        let a = vec!['a', 'b', 'c'];
+        let b = vec!['a', 'b', 'c'];
+        let c = vec!['a', 'b', 'd'];
+        assert_eq!(a, b);
+        assert_eq!(true, a == b);
+        assert_eq!(false, a == c);
+
+        let slice_a = &a[0..2];
+        let slice_b = &b[0..2];
+        let slice_c = &c[1..3];
+        assert_eq!(slice_a, slice_b);
+        assert_eq!(true, slice_a == slice_b);
+        assert_eq!(false, slice_a == slice_c);
+        panic!("{:?}", String::from_utf8_lossy("ú".as_bytes()));
     }
 }
