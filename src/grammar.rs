@@ -228,6 +228,14 @@ pub enum Parameters {
     HardError(bool),
     /// Sets the current node to the label with the given name
     Goto(String),
+    /// Hints to the parser that the node starts here
+    /// 
+    /// This should be used at the start of every node
+    /// because it will prevent the parser from counting 
+    /// whitespace in front of the node
+    NodeStart,
+    /// Hints to the parser that the node ends here
+    NodeEnd,
 }
 
 pub struct Enumerator {

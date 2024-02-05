@@ -789,6 +789,12 @@ impl<'a> Parser<'a> {
                 grammar::Parameters::HardError(value) => {
                     node.harderror = *value;
                 }
+                grammar::Parameters::NodeStart => {
+                    node.first_string_idx = lexer.tokens[cursor.idx].index;
+                }
+                grammar::Parameters::NodeEnd => {
+                    node.last_string_idx = lexer.tokens[cursor.idx].index + lexer.tokens[cursor.idx].len;
+                }
                 grammar::Parameters::Back(_) => todo!(),
                 grammar::Parameters::Return => todo!(),
                 grammar::Parameters::Goto(_) => todo!(),

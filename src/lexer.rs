@@ -86,13 +86,13 @@ impl<'a> Lexer<'a> {
             if chars[i].1 == '\n' {
                 line += 1;
                 column = 0;
-                i += 1;
                 tokens.push(Token {
-                    index: i,
+                    index: chars[i].0,
                     len: 1,
                     location: TextLocation::new(line, column),
                     kind: TokenKinds::Control(ControlTokenKind::Eol),
                 });
+                i += 1;
                 continue;
             }
 
@@ -112,7 +112,7 @@ impl<'a> Lexer<'a> {
                     token = &self.text[start..end];
                     if token == *token_kind {
                         tokens.push(Token {
-                            index: i,
+                            index: chars[i].0,
                             len: j + 1,
                             location: TextLocation::new(line, column),
                             kind: TokenKinds::Token(token.to_string()),
@@ -128,7 +128,7 @@ impl<'a> Lexer<'a> {
             // Match whitespace
             if chars[i].1.is_whitespace() {
                 tokens.push(Token {
-                    index: i,
+                    index: chars[i].0,
                     len: 1,
                     location: TextLocation::new(line, column),
                     kind: TokenKinds::Whitespace,
@@ -153,7 +153,7 @@ impl<'a> Lexer<'a> {
                 j += 1;
             }
             tokens.push(Token {
-                index: i,
+                index: chars[i].0,
                 len: j,
                 location: TextLocation::new(line, column),
                 kind: TokenKinds::Text,

@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, vec};
+    use std::{collections::{btree_map::Entry, HashMap}, vec};
 
     use crate::lexer::TokenKinds;
 
@@ -228,7 +228,9 @@ mod tests {
     #[test]
     fn string() {
         let str = r#"
-"úťf-8 string"
+
+
+"úťf-8 štring"
 "second string"
 "#;
 
@@ -251,22 +253,58 @@ mod tests {
                     grammar::Rule::Is {
                         token: grammar::MatchToken::Token(TokenKinds::Token("\"".to_string())),
                         rules: vec![],
-                        parameters: vec![Parameters::Set("start".to_string())],
+                        parameters: vec![Parameters::Set("start".to_string()), Parameters::NodeStart],
                     },
                     grammar::Rule::Until {
                         token: grammar::MatchToken::Token(TokenKinds::Token("\"".to_string())),
                         rules: vec![],
-                        parameters: vec![Parameters::Set("end".to_string())],
+                        parameters: vec![Parameters::Set("end".to_string()), Parameters::NodeEnd],
                     },
                 ],
                 variables,
             },
         );
-        parser.parser.entry = String::from("string");
+
+        let mut variables = HashMap::new();
+        variables.insert("strings".to_string(), VariableKind::NodeList);
+        
+        parser.grammar.nodes.insert(
+            "entry".to_string(),
+            grammar::Node {
+                name: "entry".to_string(),
+                rules: vec![
+                    grammar::Rule::While {
+                        token: grammar::MatchToken::Node("string".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("strings".to_string())],
+                    },
+                ],
+                variables,
+            },
+        );
 
         let result = parser.parse().unwrap();
+        let strings = result.entry.variables.get("strings").unwrap();
+        match strings {
+            parser::VariableKind::NodeList(ref strings) => {
+                assert_eq!(strings.len(), 2);
+                
+                // first string
+                if let parser::Nodes::Node(node) = &strings[0] {
+                    assert_eq!(result.node_to_string(node), r#""úťf-8 štring""#);
+                } else {
+                    panic!("Expected Node");
+                };
 
-        assert_eq!(result.node_to_string(&result.entry), "\"úťf-8 string\"");
+                // second string
+                if let parser::Nodes::Node(node) = &strings[1] {
+                    assert_eq!(result.node_to_string(node), r#""second string""#);
+                } else {
+                    panic!("Expected Node");
+                };
+            }
+            _ => panic!("Expected NodeList"),
+        }
     }
 
     #[test]
@@ -284,6 +322,5 @@ mod tests {
         assert_eq!(slice_a, slice_b);
         assert_eq!(true, slice_a == slice_b);
         assert_eq!(false, slice_a == slice_c);
-        panic!("{:?}", String::from_utf8_lossy("ú".as_bytes()));
     }
 }
