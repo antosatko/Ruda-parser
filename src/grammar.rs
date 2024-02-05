@@ -219,6 +219,8 @@ pub enum Parameters {
     Back(u8),
     /// Returns from node
     Return,
+    /// Breaks from rule block
+    Break,
     /// If the node ends with an error, it will be a hard error
     /// resulting in the parent node to also end with an error
     ///

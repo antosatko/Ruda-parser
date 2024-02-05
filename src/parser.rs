@@ -98,6 +98,7 @@ impl<'a> Parser<'a> {
         cursor_clone: &Cursor,
         node: &mut Node,
     ) -> Result<(), ParseError> {
+        let mut msg_bus = MsgBus::new();
         let mut i = 0;
         while i < rules.len() {
             let rule = &rules[i];
@@ -118,6 +119,7 @@ impl<'a> Parser<'a> {
                                 cursor_clone,
                                 node,
                                 val,
+                                &mut msg_bus,
                             )?;
                             cursor.idx += 1;
                             self.parse_rules(
@@ -184,6 +186,7 @@ impl<'a> Parser<'a> {
                                     cursor_clone,
                                     node,
                                     val,
+                                    &mut msg_bus,
                                 )?;
                                 cursor.idx += 1;
                                 self.parse_rules(
@@ -230,6 +233,7 @@ impl<'a> Parser<'a> {
                                 cursor_clone,
                                 node,
                                 val,
+                                &mut msg_bus,
                             )?;
                             println!("--------");
                             cursor.idx += 1;
@@ -280,6 +284,7 @@ impl<'a> Parser<'a> {
                                     cursor_clone,
                                     node,
                                     val,
+                                    &mut msg_bus,
                                 )?;
                                 cursor.idx += 1;
                                 self.parse_rules(
@@ -326,6 +331,7 @@ impl<'a> Parser<'a> {
                             cursor_clone,
                             node,
                             val,
+                            &mut msg_bus,
                         )?;
                         cursor.idx += 1;
                         self.parse_rules(
@@ -364,6 +370,7 @@ impl<'a> Parser<'a> {
                         cursor_clone,
                         node,
                         Nodes::Token(lexer.tokens[cursor.idx].clone()),
+                        &mut msg_bus,
                     )?;
                     self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?;
                 }
@@ -498,6 +505,35 @@ impl<'a> Parser<'a> {
                 }
             }
             i += 1;
+            while let Some(msg) = msg_bus.receive() {
+                match msg {
+                    Msg::Return => todo!(),
+                    Msg::Break => return Ok(()),
+                    Msg::Goto(label) => {
+                        let mut j = 0;
+                        loop {
+                            if j >= rules.len() {
+                                return Err(ParseError::LabelNotFound(label.to_string()));
+                            }
+                            match &rules[j] {
+                                grammar::Rule::Command {
+                                    command: grammar::Commands::Label { name },
+                                } => {
+                                    if *name == label {
+                                        i = j;
+                                        break;
+                                    }
+                                }
+                                _ => {}
+                            }
+                            j += 1;
+                        }
+                    }
+                    Msg::Back(steps) => {
+                        i -= steps;
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -606,6 +642,7 @@ impl<'a> Parser<'a> {
         _cursor_clone: &Cursor,
         node: &mut Node,
         value: Nodes,
+        bus: &mut MsgBus,
     ) -> Result<(), ParseError> {
         for parameter in parameters {
             match parameter {
@@ -801,9 +838,18 @@ impl<'a> Parser<'a> {
                     node.last_string_idx =
                         lexer.tokens[cursor.idx].index + lexer.tokens[cursor.idx].len;
                 }
-                grammar::Parameters::Back(_) => todo!(),
-                grammar::Parameters::Return => todo!(),
-                grammar::Parameters::Goto(_) => todo!(),
+                grammar::Parameters::Back(steps) => {
+                    bus.send(Msg::Back(*steps as usize));
+                }
+                grammar::Parameters::Return => {
+                    bus.send(Msg::Return);
+                }
+                grammar::Parameters::Goto(label) => {
+                    bus.send(Msg::Goto(label.to_string()));
+                }
+                grammar::Parameters::Break => {
+                    bus.send(Msg::Break);
+                }
             }
         }
         Ok(())
@@ -956,4 +1002,40 @@ impl std::fmt::Debug for ParseError {
 struct Cursor {
     /// Current index in the token stream
     idx: usize,
+}
+
+
+struct MsgBus {
+    messages: Vec<Msg>,
+}
+
+impl MsgBus {
+    fn new() -> MsgBus {
+        MsgBus {
+            messages: Vec::new(),
+        }
+    }
+
+    fn send(&mut self, msg: Msg) {
+        self.messages.push(msg);
+    }
+
+    fn receive(&mut self) -> Option<Msg> {
+        self.messages.pop()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.messages.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.messages.len()
+    }
+}
+
+enum Msg {
+    Return,
+    Break,
+    Goto(String),
+    Back(usize),
 }
