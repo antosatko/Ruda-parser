@@ -97,6 +97,10 @@ pub enum Rule {
         /// The parameters will be used once every time the token is matched
         parameters: Vec<Parameters>,
     },
+    /// Loop that will be executed until a break command is executed
+    Loop {
+        rules: Rules,
+    },
     /// Searches in the tokens until a token is matched
     Until {
         token: MatchToken,
@@ -167,6 +171,8 @@ pub enum MatchToken {
     Word(String),
     /// An enumerator
     Enumerator(String),
+    /// Any token
+    Any
 }
 
 /// A node is a collection of rules that will be executed when the node is matched

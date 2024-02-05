@@ -29,14 +29,6 @@ impl<'a> Parser<'a> {
         grammar: &Grammar,
         lexer: &Lexer,
     ) -> Result<ParseResult, ParseError> {
-        println!(
-            "{:?}",
-            lexer
-                .tokens
-                .iter()
-                .map(|t| t.kind.clone())
-                .collect::<Vec<TokenKinds>>()
-        );
         let mut cursor = Cursor { idx: 0 };
         let mut globals = Node::variables_from_grammar(&grammar.globals)?;
         let entry = match self.parse_node(grammar, lexer, &self.entry, &mut cursor, &mut globals) {
@@ -70,7 +62,7 @@ impl<'a> Parser<'a> {
             Some(node) => &node.rules,
             None => return Err((ParseError::NodeNotFound(name.to_string()), node)),
         };
-        match self.parse_rules(
+        let result = self.parse_rules(
             grammar,
             lexer,
             rules,
@@ -78,14 +70,25 @@ impl<'a> Parser<'a> {
             globals,
             &cursor_clone,
             &mut node,
-        ) {
-            Ok(_) => {}
-            Err(err) => return Err((err, node)),
-        }
-        cursor.idx -= 1;
-        node.last_string_idx = lexer.tokens[cursor.idx].index + lexer.tokens[cursor.idx].len;
+        );
 
-        Ok(node)
+        cursor.idx -= 1;
+
+        // If the node has not set the last_string_idx, we set it to the end of the last token
+        if node.last_string_idx == 0 {
+            node.last_string_idx = lexer.tokens[cursor.idx].index + lexer.tokens[cursor.idx].len;
+        }
+
+        match result {
+            Ok(msg) => match msg {
+                Msg::Ok => Ok(node),
+                Msg::Return => Ok(node),
+                Msg::Break => Ok(node),
+                Msg::Back(steps) => Err((ParseError::CannotGoBack(steps), node)),
+                Msg::Goto(label) => Err((ParseError::LabelNotFound(label), node)),
+            },
+            Err(err) => Err((err, node)),
+        }
     }
 
     fn parse_rules(
@@ -97,7 +100,8 @@ impl<'a> Parser<'a> {
         globals: &mut HashMap<String, VariableKind>,
         cursor_clone: &Cursor,
         node: &mut Node,
-    ) -> Result<(), ParseError> {
+    ) -> Result<Msg, ParseError> {
+        let mut advance = true;
         let mut msg_bus = MsgBus::new();
         let mut i = 0;
         while i < rules.len() {
@@ -130,7 +134,8 @@ impl<'a> Parser<'a> {
                                 globals,
                                 cursor_clone,
                                 node,
-                            )?;
+                            )?
+                            .push(&mut msg_bus);
                         }
                         TokenCompare::IsNot(err) => {
                             return Err(err);
@@ -159,7 +164,8 @@ impl<'a> Parser<'a> {
                                 globals,
                                 cursor_clone,
                                 node,
-                            )?;
+                            )?
+                            .push(&mut msg_bus);
                         }
                     }
                 }
@@ -197,7 +203,8 @@ impl<'a> Parser<'a> {
                                     globals,
                                     cursor_clone,
                                     node,
-                                )?;
+                                )?
+                                .push(&mut msg_bus);
                                 break;
                             }
                             IsNot(_) => {}
@@ -220,7 +227,6 @@ impl<'a> Parser<'a> {
                     isnt,
                     parameters,
                 } => {
-                    println!("//maybe//");
                     use TokenCompare::*;
                     match self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)? {
                         Is(val) => {
@@ -235,7 +241,6 @@ impl<'a> Parser<'a> {
                                 val,
                                 &mut msg_bus,
                             )?;
-                            println!("--------");
                             cursor.idx += 1;
                             self.parse_rules(
                                 grammar,
@@ -245,7 +250,8 @@ impl<'a> Parser<'a> {
                                 globals,
                                 cursor_clone,
                                 node,
-                            )?;
+                            )?
+                            .push(&mut msg_bus);
                         }
                         IsNot(_) => {
                             self.parse_rules(
@@ -256,12 +262,12 @@ impl<'a> Parser<'a> {
                                 globals,
                                 cursor_clone,
                                 node,
-                            )?;
+                            )?
+                            .push(&mut msg_bus);
                         }
                     }
                 }
                 grammar::Rule::MaybeOneOf { is_one_of, isnt } => {
-                    println!("//maybe one of//");
                     let mut found = false;
                     for (token, rules, parameters) in is_one_of {
                         use TokenCompare::*;
@@ -295,7 +301,8 @@ impl<'a> Parser<'a> {
                                     globals,
                                     cursor_clone,
                                     node,
-                                )?;
+                                )?
+                                .push(&mut msg_bus);
                                 break;
                             }
                             IsNot(_) => {}
@@ -310,7 +317,8 @@ impl<'a> Parser<'a> {
                             globals,
                             cursor_clone,
                             node,
-                        )?;
+                        )?
+                        .push(&mut msg_bus);
                     }
                 }
                 grammar::Rule::While {
@@ -318,8 +326,7 @@ impl<'a> Parser<'a> {
                     rules,
                     parameters,
                 } => {
-                    println!("//while//");
-                    while let TokenCompare::Is(val) =
+                    if let TokenCompare::Is(val) =
                         self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)?
                     {
                         self.parse_parameters(
@@ -342,7 +349,9 @@ impl<'a> Parser<'a> {
                             globals,
                             cursor_clone,
                             node,
-                        )?;
+                        )?
+                        .push(&mut msg_bus);
+                        advance = false;
                     }
                 }
                 grammar::Rule::Until {
@@ -351,7 +360,6 @@ impl<'a> Parser<'a> {
                     parameters,
                 } => {
                     // search for the token and execute the rules when the token is found
-                    println!("//until//");
                     while let TokenCompare::IsNot(_) =
                         self.match_token(grammar, lexer, token, cursor, globals, cursor_clone)?
                     {
@@ -360,7 +368,6 @@ impl<'a> Parser<'a> {
                             return Err(ParseError::Eof);
                         }
                     }
-                    cursor.idx += 1;
                     self.parse_parameters(
                         grammar,
                         lexer,
@@ -372,148 +379,134 @@ impl<'a> Parser<'a> {
                         Nodes::Token(lexer.tokens[cursor.idx].clone()),
                         &mut msg_bus,
                     )?;
-                    self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?;
+                    cursor.idx += 1;
+                    self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?
+                        .push(&mut msg_bus);
                 }
-                grammar::Rule::Command { command } => {
-                    println!("//command//");
-                    match command {
-                        grammar::Commands::Compare {
-                            left,
-                            right,
-                            comparison,
-                            rules,
-                        } => {
-                            let left = match node.variables.get(left) {
-                                Some(kind) => kind,
-                                None => return Err(ParseError::VariableNotFound(left.to_string())),
-                            };
-                            let right = match node.variables.get(right) {
-                                Some(kind) => kind,
-                                None => {
-                                    return Err(ParseError::VariableNotFound(right.to_string()))
-                                }
-                            };
-                            let comparisons = match left {
-                                VariableKind::Node(node_left) => {
-                                    if let VariableKind::Node(node_right) = right {
-                                        match (node_left, node_right) {
-                                            (Some(Nodes::Node(left)), Some(Nodes::Node(right))) => {
-                                                if left.name == right.name {
-                                                    vec![grammar::Comparison::Equal]
-                                                } else {
-                                                    vec![grammar::Comparison::NotEqual]
-                                                }
-                                            }
-                                            (
-                                                Some(Nodes::Token(left)),
-                                                Some(Nodes::Token(right)),
-                                            ) => {
-                                                if left == right {
-                                                    vec![grammar::Comparison::Equal]
-                                                } else {
-                                                    vec![grammar::Comparison::NotEqual]
-                                                }
-                                            }
-                                            (None, None) => {
+                grammar::Rule::Command { command } => match command {
+                    grammar::Commands::Compare {
+                        left,
+                        right,
+                        comparison,
+                        rules,
+                    } => {
+                        let left = match node.variables.get(left) {
+                            Some(kind) => kind,
+                            None => return Err(ParseError::VariableNotFound(left.to_string())),
+                        };
+                        let right = match node.variables.get(right) {
+                            Some(kind) => kind,
+                            None => return Err(ParseError::VariableNotFound(right.to_string())),
+                        };
+                        let comparisons = match left {
+                            VariableKind::Node(node_left) => {
+                                if let VariableKind::Node(node_right) = right {
+                                    match (node_left, node_right) {
+                                        (Some(Nodes::Node(left)), Some(Nodes::Node(right))) => {
+                                            if left.name == right.name {
                                                 vec![grammar::Comparison::Equal]
-                                            }
-                                            _ => {
+                                            } else {
                                                 vec![grammar::Comparison::NotEqual]
                                             }
                                         }
-                                    } else {
-                                        vec![grammar::Comparison::NotEqual]
-                                    }
-                                }
-                                VariableKind::NodeList(_) => vec![grammar::Comparison::NotEqual],
-                                VariableKind::Boolean(left) => {
-                                    if let VariableKind::Boolean(right) = right {
-                                        if *left == *right {
+                                        (Some(Nodes::Token(left)), Some(Nodes::Token(right))) => {
+                                            if left == right {
+                                                vec![grammar::Comparison::Equal]
+                                            } else {
+                                                vec![grammar::Comparison::NotEqual]
+                                            }
+                                        }
+                                        (None, None) => {
                                             vec![grammar::Comparison::Equal]
-                                        } else {
+                                        }
+                                        _ => {
                                             vec![grammar::Comparison::NotEqual]
                                         }
+                                    }
+                                } else {
+                                    vec![grammar::Comparison::NotEqual]
+                                }
+                            }
+                            VariableKind::NodeList(_) => vec![grammar::Comparison::NotEqual],
+                            VariableKind::Boolean(left) => {
+                                if let VariableKind::Boolean(right) = right {
+                                    if *left == *right {
+                                        vec![grammar::Comparison::Equal]
                                     } else {
                                         vec![grammar::Comparison::NotEqual]
                                     }
+                                } else {
+                                    vec![grammar::Comparison::NotEqual]
                                 }
-                                VariableKind::Number(left) => {
-                                    if let VariableKind::Number(right) = right {
-                                        let mut result = Vec::new();
-                                        if *left == *right {
-                                            result.push(grammar::Comparison::Equal);
+                            }
+                            VariableKind::Number(left) => {
+                                if let VariableKind::Number(right) = right {
+                                    let mut result = Vec::new();
+                                    if *left == *right {
+                                        result.push(grammar::Comparison::Equal);
+                                        result.push(grammar::Comparison::GreaterThanOrEqual);
+                                        result.push(grammar::Comparison::LessThanOrEqual);
+                                    } else {
+                                        result.push(grammar::Comparison::NotEqual);
+                                        if *left > *right {
+                                            result.push(grammar::Comparison::GreaterThan);
                                             result.push(grammar::Comparison::GreaterThanOrEqual);
+                                        }
+                                        if *left < *right {
+                                            result.push(grammar::Comparison::LessThan);
                                             result.push(grammar::Comparison::LessThanOrEqual);
-                                        } else {
-                                            result.push(grammar::Comparison::NotEqual);
-                                            if *left > *right {
-                                                result.push(grammar::Comparison::GreaterThan);
-                                                result
-                                                    .push(grammar::Comparison::GreaterThanOrEqual);
-                                            }
-                                            if *left < *right {
-                                                result.push(grammar::Comparison::LessThan);
-                                                result.push(grammar::Comparison::LessThanOrEqual);
-                                            }
-                                        }
-                                        result
-                                    } else {
-                                        vec![grammar::Comparison::NotEqual]
-                                    }
-                                }
-                            };
-                            if comparisons.contains(comparison) {
-                                self.parse_rules(
-                                    grammar,
-                                    lexer,
-                                    rules,
-                                    cursor,
-                                    globals,
-                                    cursor_clone,
-                                    node,
-                                )?;
-                            }
-                        }
-                        grammar::Commands::Error { message } => {
-                            Err(ParseError::Message(message.to_string()))?
-                        }
-                        grammar::Commands::HardError { set } => {
-                            node.harderror = *set;
-                        }
-                        grammar::Commands::Goto { label } => {
-                            let mut j = 0;
-                            loop {
-                                if j >= rules.len() {
-                                    return Err(ParseError::LabelNotFound(label.to_string()));
-                                }
-                                match &rules[j] {
-                                    grammar::Rule::Command {
-                                        command: grammar::Commands::Label { name },
-                                    } => {
-                                        if name == label {
-                                            cursor.idx = j;
-                                            break;
                                         }
                                     }
-                                    _ => {}
+                                    result
+                                } else {
+                                    vec![grammar::Comparison::NotEqual]
                                 }
-                                j += 1;
                             }
+                        };
+                        if comparisons.contains(comparison) {
+                            self.parse_rules(
+                                grammar,
+                                lexer,
+                                rules,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                            )?
+                            .push(&mut msg_bus);
                         }
-                        grammar::Commands::Label { .. } => {}
                     }
+                    grammar::Commands::Error { message } => {
+                        Err(ParseError::Message(message.to_string()))?
+                    }
+                    grammar::Commands::HardError { set } => {
+                        node.harderror = *set;
+                    }
+                    grammar::Commands::Goto { label } => {
+                        msg_bus.send(Msg::Goto(label.to_string()));
+                    }
+                    grammar::Commands::Label { name: _ } => (),
+                },
+                grammar::Rule::Loop { rules } => {
+                    self.parse_rules(grammar, lexer, rules, cursor, globals, cursor_clone, node)?
+                        .push(&mut msg_bus);
+                    advance = false;
                 }
             }
-            i += 1;
+            if advance {
+                i += 1;
+            } else {
+                advance = true;
+            }
             while let Some(msg) = msg_bus.receive() {
                 match msg {
-                    Msg::Return => todo!(),
-                    Msg::Break => return Ok(()),
+                    Msg::Return => return Ok(Msg::Return),
+                    Msg::Break => return Ok(Msg::Ok),
                     Msg::Goto(label) => {
                         let mut j = 0;
                         loop {
                             if j >= rules.len() {
-                                return Err(ParseError::LabelNotFound(label.to_string()));
+                                return Ok(Msg::Goto(label));
                             }
                             match &rules[j] {
                                 grammar::Rule::Command {
@@ -530,12 +523,16 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Msg::Back(steps) => {
+                        if i < steps {
+                            return Ok(Msg::Back(steps - i));
+                        }
                         i -= steps;
                     }
+                    Msg::Ok => {}
                 }
             }
         }
-        Ok(())
+        Ok(Msg::Ok)
     }
 
     fn match_token(
@@ -557,8 +554,6 @@ impl<'a> Parser<'a> {
                     cursor.idx += 1;
                     current_token = &lexer.tokens[cursor.idx];
                 }
-                println!("{:?}", token);
-                println!("{:?}", lexer.stringify(current_token));
                 if *tok != current_token.kind {
                     return Ok(TokenCompare::IsNot(ParseError::ExpectedToken {
                         expected: tok.clone(),
@@ -568,7 +563,6 @@ impl<'a> Parser<'a> {
                 return Ok(TokenCompare::Is(Nodes::Token(current_token.clone())));
             }
             grammar::MatchToken::Node(node_name) => {
-                println!("--{:?}--", node_name);
                 match self.parse_node(grammar, lexer, node_name, cursor, globals) {
                     Ok(node) => return Ok(TokenCompare::Is(Nodes::Node(node))),
                     Err((err, node)) => match node.harderror {
@@ -583,8 +577,6 @@ impl<'a> Parser<'a> {
                     cursor.idx += 1;
                     current_token = &lexer.tokens[cursor.idx];
                 }
-                println!("{:?}", token);
-                println!("{:?}", lexer.stringify(current_token));
                 if let TokenKinds::Text = current_token.kind {
                     if word != &lexer.stringify(&current_token) {
                         return Ok(TokenCompare::IsNot(ParseError::ExpectedToken {
@@ -601,7 +593,6 @@ impl<'a> Parser<'a> {
                 return Ok(TokenCompare::Is(Nodes::Token(current_token.clone())));
             }
             grammar::MatchToken::Enumerator(enumerator) => {
-                println!("--{:?}--", enumerator);
                 let enumerator = match grammar.enumerators.get(enumerator) {
                     Some(enumerator) => enumerator,
                     None => return Err(ParseError::EnumeratorNotFound(enumerator.to_string())),
@@ -611,7 +602,6 @@ impl<'a> Parser<'a> {
                     cursor.idx += 1;
                     current_token = &lexer.tokens[cursor.idx];
                 }
-                println!("{:?}", lexer.tokens[cursor.idx].kind);
                 let mut i = 0;
                 let token = loop {
                     if i >= enumerator.values.len() {
@@ -628,6 +618,11 @@ impl<'a> Parser<'a> {
                     i += 1;
                 };
                 return Ok(TokenCompare::Is(token));
+            }
+            grammar::MatchToken::Any => {
+                let token = lexer.tokens[cursor.idx].clone();
+                cursor.idx += 1;
+                return Ok(TokenCompare::Is(Nodes::Token(token)));
             }
         }
     }
@@ -968,6 +963,8 @@ pub enum ParseError {
     Eof,
     /// Label not found - Developer error
     LabelNotFound(String),
+    /// Cannot go back - Developer error
+    CannotGoBack(usize),
 }
 
 impl std::fmt::Debug for ParseError {
@@ -993,6 +990,7 @@ impl std::fmt::Debug for ParseError {
             ParseError::Message(message) => write!(f, "{}", message),
             ParseError::Eof => write!(f, "Unexpected end of file"),
             ParseError::LabelNotFound(name) => write!(f, "Label not found: {}", name),
+            ParseError::CannotGoBack(steps) => write!(f, "Cannot go back {} steps", steps),
         }
     }
 }
@@ -1003,7 +1001,6 @@ struct Cursor {
     /// Current index in the token stream
     idx: usize,
 }
-
 
 struct MsgBus {
     messages: Vec<Msg>,
@@ -1023,14 +1020,6 @@ impl MsgBus {
     fn receive(&mut self) -> Option<Msg> {
         self.messages.pop()
     }
-
-    fn is_empty(&self) -> bool {
-        self.messages.is_empty()
-    }
-
-    fn len(&self) -> usize {
-        self.messages.len()
-    }
 }
 
 enum Msg {
@@ -1038,4 +1027,12 @@ enum Msg {
     Break,
     Goto(String),
     Back(usize),
+    Ok,
+}
+
+impl Msg {
+
+    fn push(self, bus: &mut MsgBus) {
+        bus.send(self);
+    }
 }

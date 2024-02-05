@@ -1,5 +1,3 @@
-use std::ops::Index;
-
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TokenKinds {
     /// A sequence of characters

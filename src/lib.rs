@@ -37,7 +37,10 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::{btree_map::Entry, HashMap}, vec};
+    use std::{
+        collections::HashMap,
+        vec,
+    };
 
     use crate::lexer::TokenKinds;
 
@@ -237,6 +240,7 @@ mod tests {
         let mut parser = Parser::new();
         parser.set_text(str);
         parser.lexer.add_token("\"".to_string());
+        parser.lexer.add_token("\\".to_string());
 
         let tokens = parser.lexer.lex();
         parser.lexer.tokens = tokens;
@@ -253,7 +257,10 @@ mod tests {
                     grammar::Rule::Is {
                         token: grammar::MatchToken::Token(TokenKinds::Token("\"".to_string())),
                         rules: vec![],
-                        parameters: vec![Parameters::Set("start".to_string()), Parameters::NodeStart],
+                        parameters: vec![
+                            Parameters::Set("start".to_string()),
+                            Parameters::NodeStart,
+                        ],
                     },
                     grammar::Rule::Until {
                         token: grammar::MatchToken::Token(TokenKinds::Token("\"".to_string())),
@@ -267,7 +274,9 @@ mod tests {
 
         let mut variables = HashMap::new();
         variables.insert("strings".to_string(), VariableKind::NodeList);
-        
+        variables.insert("count".to_string(), VariableKind::Number);
+        variables.insert("zero".to_string(), VariableKind::Number);
+
         parser.grammar.nodes.insert(
             "entry".to_string(),
             grammar::Node {
@@ -276,7 +285,22 @@ mod tests {
                     grammar::Rule::While {
                         token: grammar::MatchToken::Node("string".to_string()),
                         rules: vec![],
-                        parameters: vec![Parameters::Set("strings".to_string())],
+                        parameters: vec![
+                            Parameters::Set("strings".to_string()),
+                            Parameters::Increment("count".to_string()),
+                        ],
+                    },
+                    grammar::Rule::Command {
+                        command: grammar::Commands::Compare {
+                            left: "count".to_string(),
+                            right: "zero".to_string(), // zero is not defined, so it will be 0
+                            comparison: grammar::Comparison::Equal,
+                            rules: vec![grammar::Rule::Command {
+                                command: grammar::Commands::Error {
+                                    message: "No strings found".to_string(),
+                                },
+                            }],
+                        },
                     },
                 ],
                 variables,
@@ -288,7 +312,7 @@ mod tests {
         match strings {
             parser::VariableKind::NodeList(ref strings) => {
                 assert_eq!(strings.len(), 2);
-                
+
                 // first string
                 if let parser::Nodes::Node(node) = &strings[0] {
                     assert_eq!(result.node_to_string(node), r#""úťf-8 štring""#);
