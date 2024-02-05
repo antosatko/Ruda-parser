@@ -48,10 +48,7 @@ impl TextLocation {
     pub fn new(line: usize, column: usize) -> TextLocation {
         let line = line + 1;
         let column = column + 1;
-        TextLocation {
-            line,
-            column,
-        }
+        TextLocation { line, column }
     }
 }
 
@@ -146,7 +143,12 @@ impl<'a> Lexer<'a> {
                 }
                 for token_kind in &self.token_kinds {
                     // FIXME: A loooooot of unnecessary allocations
-                    if chars[i + j..].iter().map(|(_, char)| *char).collect::<Vec<char>>().starts_with(&token_kind.chars().collect::<Vec<char>>()) {
+                    if chars[i + j..]
+                        .iter()
+                        .map(|(_, char)| *char)
+                        .collect::<Vec<char>>()
+                        .starts_with(&token_kind.chars().collect::<Vec<char>>())
+                    {
                         break 'word;
                     }
                 }

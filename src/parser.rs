@@ -480,7 +480,9 @@ impl<'a> Parser<'a> {
                                     return Err(ParseError::LabelNotFound(label.to_string()));
                                 }
                                 match &rules[j] {
-                                    grammar::Rule::Command { command: grammar::Commands::Label { name } } => {
+                                    grammar::Rule::Command {
+                                        command: grammar::Commands::Label { name },
+                                    } => {
                                         if name == label {
                                             cursor.idx = j;
                                             break;
@@ -491,7 +493,7 @@ impl<'a> Parser<'a> {
                                 j += 1;
                             }
                         }
-                        grammar::Commands::Label { .. } => {},
+                        grammar::Commands::Label { .. } => {}
                     }
                 }
             }
@@ -512,7 +514,10 @@ impl<'a> Parser<'a> {
         match token {
             grammar::MatchToken::Token(tok) => {
                 let mut current_token = &lexer.tokens[cursor.idx];
-                while current_token.kind == TokenKinds::Whitespace || current_token.kind == TokenKinds::Control(crate::lexer::ControlTokenKind::Eol) {
+                while current_token.kind == TokenKinds::Whitespace
+                    || current_token.kind
+                        == TokenKinds::Control(crate::lexer::ControlTokenKind::Eol)
+                {
                     cursor.idx += 1;
                     current_token = &lexer.tokens[cursor.idx];
                 }
@@ -793,7 +798,8 @@ impl<'a> Parser<'a> {
                     node.first_string_idx = lexer.tokens[cursor.idx].index;
                 }
                 grammar::Parameters::NodeEnd => {
-                    node.last_string_idx = lexer.tokens[cursor.idx].index + lexer.tokens[cursor.idx].len;
+                    node.last_string_idx =
+                        lexer.tokens[cursor.idx].index + lexer.tokens[cursor.idx].len;
                 }
                 grammar::Parameters::Back(_) => todo!(),
                 grammar::Parameters::Return => todo!(),
@@ -816,7 +822,7 @@ pub struct ParseResult<'a> {
     pub text: &'a str,
 }
 
-impl <'a>ParseResult<'a> {
+impl<'a> ParseResult<'a> {
     pub fn node_to_string(&self, node: &Node) -> String {
         self.text[node.first_string_idx..node.last_string_idx].to_string()
     }
