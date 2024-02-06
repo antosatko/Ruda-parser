@@ -18,6 +18,10 @@ impl<'a> Grammar<'a> {
             globals: HashMap::new(),
         }
     }
+
+    pub fn add_node(&mut self, node: Node) {
+        self.nodes.insert(node.name.clone(), node);
+    }
 }
 
 /// A collection of rules

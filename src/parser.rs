@@ -867,12 +867,6 @@ pub struct ParseResult<'a> {
     pub text: &'a str,
 }
 
-impl<'a> ParseResult<'a> {
-    pub fn node_to_string(&self, node: &Node) -> String {
-        self.text[node.first_string_idx..node.last_string_idx].to_string()
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Nodes {
     Node(Node),

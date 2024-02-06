@@ -146,8 +146,7 @@ mod tests {
             },
         );
 
-        parser.grammar.nodes.insert(
-            "KWLet".to_string(),
+        parser.grammar.add_node(
             grammar::Node {
                 name: "KWLet".to_string(),
                 rules: vec![
@@ -198,8 +197,7 @@ mod tests {
         );
         let mut variables = HashMap::new();
         variables.insert("nodes".to_string(), VariableKind::NodeList);
-        parser.grammar.nodes.insert(
-            "value".to_string(),
+        parser.grammar.add_node(
             grammar::Node {
                 name: "value".to_string(),
                 rules: vec![
@@ -249,8 +247,7 @@ mod tests {
         let mut variables = HashMap::new();
         variables.insert("start".to_string(), VariableKind::Node);
         variables.insert("end".to_string(), VariableKind::Node);
-        parser.grammar.nodes.insert(
-            "string".to_string(),
+        parser.grammar.add_node(
             grammar::Node {
                 name: "string".to_string(),
                 rules: vec![
@@ -278,8 +275,7 @@ mod tests {
         variables.insert("count".to_string(), VariableKind::Number);
         variables.insert("zero".to_string(), VariableKind::Number);
 
-        parser.grammar.nodes.insert(
-            "entry".to_string(),
+        parser.grammar.add_node(
             grammar::Node {
                 name: "entry".to_string(),
                 rules: vec![
@@ -309,27 +305,14 @@ mod tests {
         );
 
         let result = parser.parse().unwrap();
-        let strings = result.entry.variables.get("strings").unwrap();
-        match strings {
-            parser::VariableKind::NodeList(ref strings) => {
-                assert_eq!(strings.len(), 2);
+        let strings = result.entry.get_list("strings");
+        assert_eq!(strings.len(), 2);
 
-                // first string
-                if let parser::Nodes::Node(node) = &strings[0] {
-                    assert_eq!(result.node_to_string(node), r#""úťf-8 štring""#);
-                } else {
-                    panic!("Expected Node");
-                };
+        // first string
+        assert_eq!(result.stringify_node(&strings[0]), r#""úťf-8 štring""#);
 
-                // second string
-                if let parser::Nodes::Node(node) = &strings[1] {
-                    assert_eq!(result.node_to_string(node), r#""second string""#);
-                } else {
-                    panic!("Expected Node");
-                };
-            }
-            _ => panic!("Expected NodeList"),
-        }
+        // second string
+        assert_eq!(result.stringify_node(&strings[1]), r#""second string""#);
     }
 
     #[test]
