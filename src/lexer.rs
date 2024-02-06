@@ -96,8 +96,6 @@ impl<'a> Lexer<'a> {
                 let mut token;
                 let mut j: usize = 0;
                 while i + j < chars.len() {
-                    //token = &self.text[i..i + j + 1];
-                    println!("{:?}", chars);
                     let start = chars[i].0;
                     let end = if i + j + 1 < chars.len() {
                         chars[i + j + 1].0
@@ -141,12 +139,22 @@ impl<'a> Lexer<'a> {
                 }
                 for token_kind in &self.token_kinds {
                     // FIXME: A loooooot of unnecessary allocations
-                    if chars[i + j..]
+                    /*if chars[i + j..]
                         .iter()
                         .map(|(_, char)| *char)
                         .collect::<Vec<char>>()
                         .starts_with(&token_kind.chars().collect::<Vec<char>>())
                     {
+                        break 'word;
+                    }*/
+                    let start = chars[i + j].0;
+                    let end = if i + j + 1 < chars.len() {
+                        chars[i + j + 1].0
+                    } else {
+                        chars[i + j].0 + chars[i + j].1.len_utf8()
+                    };
+                    let token = &self.text[start..end];
+                    if token == *token_kind {
                         break 'word;
                     }
                 }

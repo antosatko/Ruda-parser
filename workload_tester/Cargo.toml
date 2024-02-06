@@ -1,0 +1,14 @@
+cargo-features = ["profile-rustflags"]
+
+[package]
+name = "workload_tester"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rparse ={ path = "../" }
+
+[profile.release]
+debug = true
+debuginfo-level = 1
+rustflags = ["-C", "symbol-mangling-version=v0"]
