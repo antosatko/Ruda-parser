@@ -2,6 +2,7 @@ pub mod grammar;
 pub mod lexer;
 pub mod parser;
 pub mod preprocesor;
+pub mod api;
 
 pub struct Parser<'a> {
     text: &'a str,

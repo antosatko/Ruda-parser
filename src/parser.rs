@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
             Ok(msg) => match msg {
                 Msg::Ok => Ok(node),
                 Msg::Return => Ok(node),
-                Msg::Break => Ok(node),
+                Msg::Break(n) => Err((ParseError::CannotBreak(n), node)),
                 Msg::Back(steps) => Err((ParseError::CannotGoBack(steps), node)),
                 Msg::Goto(label) => Err((ParseError::LabelNotFound(label), node)),
             },
@@ -501,7 +501,11 @@ impl<'a> Parser<'a> {
             while let Some(msg) = msg_bus.receive() {
                 match msg {
                     Msg::Return => return Ok(Msg::Return),
-                    Msg::Break => return Ok(Msg::Ok),
+                    Msg::Break(n) => if n == 1 {
+                        return Ok(Msg::Ok)
+                    }else {
+                        return Ok(Msg::Break(n - 1))
+                    },
                     Msg::Goto(label) => {
                         let mut j = 0;
                         loop {
@@ -842,8 +846,8 @@ impl<'a> Parser<'a> {
                 grammar::Parameters::Goto(label) => {
                     bus.send(Msg::Goto(label.to_string()));
                 }
-                grammar::Parameters::Break => {
-                    bus.send(Msg::Break);
+                grammar::Parameters::Break(n) => {
+                    bus.send(Msg::Break(*n));
                 }
             }
         }
@@ -879,9 +883,9 @@ pub enum Nodes {
 pub struct Node {
     pub name: String,
     pub variables: HashMap<String, VariableKind>,
-    first_string_idx: usize,
-    last_string_idx: usize,
-    harderror: bool,
+    pub(crate) first_string_idx: usize,
+    pub(crate) last_string_idx: usize,
+    pub(crate) harderror: bool,
 }
 
 impl Node {
@@ -965,6 +969,8 @@ pub enum ParseError {
     LabelNotFound(String),
     /// Cannot go back - Developer error
     CannotGoBack(usize),
+    /// Cannot break - Developer error
+    CannotBreak(usize)
 }
 
 impl std::fmt::Debug for ParseError {
@@ -991,6 +997,7 @@ impl std::fmt::Debug for ParseError {
             ParseError::Eof => write!(f, "Unexpected end of file"),
             ParseError::LabelNotFound(name) => write!(f, "Label not found: {}", name),
             ParseError::CannotGoBack(steps) => write!(f, "Cannot go back {} steps", steps),
+            ParseError::CannotBreak(n) => write!(f, "Cannot break {} more steps", n),
         }
     }
 }
@@ -1024,7 +1031,7 @@ impl MsgBus {
 
 enum Msg {
     Return,
-    Break,
+    Break(usize),
     Goto(String),
     Back(usize),
     Ok,
