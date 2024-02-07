@@ -67,7 +67,7 @@ mod tests {
         ]);
 
         // Parse the text
-        let tokens = parser.lexer.lex();
+        let tokens = parser.lexer.lex_utf8();
 
         assert_eq!(tokens.len(), 21);
     }
@@ -91,7 +91,7 @@ mod tests {
         ]);
 
         // Parse the text
-        let tokens = parser.lexer.lex();
+        let tokens = parser.lexer.lex_utf8();
 
         assert_eq!(parser.lexer.stringify_slice(&tokens), txt);
         assert_eq!(parser.lexer.stringify_slice(&tokens[0..1]), "Function");
@@ -108,7 +108,7 @@ mod tests {
         let mut parser = Parser::new();
         parser.set_text("fun");
         parser.lexer.add_token("function".to_string());
-        let tokens = parser.lexer.lex();
+        let tokens = parser.lexer.lex_utf8();
         assert_eq!(tokens[0].kind, TokenKinds::Text);
     }
 
@@ -124,7 +124,7 @@ mod tests {
         parser.lexer.add_token("*".to_string());
         parser.lexer.add_token("/".to_string());
 
-        let tokens = parser.lexer.lex();
+        let tokens = parser.lexer.lex_utf8();
 
         parser.lexer.tokens = tokens;
 
@@ -256,7 +256,7 @@ mod tests {
         parser.lexer.add_token("string".to_string());
         parser.lexer.add_token(" ".to_string());
 
-        let tokens = parser.lexer.lex();
+        let tokens = parser.lexer.lex_utf8();
         parser.lexer.tokens = tokens;
 
         let mut variables = HashMap::new();
@@ -382,7 +382,7 @@ mod tests {
         parser.lexer.add_token("\"".to_string());
 
         let lex_start = std::time::Instant::now();
-        let tokens = parser.lexer.lex();
+        let tokens = parser.lexer.lex_ascii();
         parser.lexer.tokens = tokens;
         println!("lex time: {:?}", lex_start.elapsed());
 

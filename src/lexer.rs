@@ -70,7 +70,7 @@ impl<'a> Lexer<'a> {
         self.token_kinds.push(token);
     }
 
-    pub fn lex(&mut self) -> Vec<Token> {
+    pub fn lex_utf8(&mut self) -> Vec<Token> {
         let chars = self.text.char_indices().collect::<Vec<(usize, char)>>();
         let mut tokens = Vec::new();
         let mut i = 0;
@@ -138,15 +138,6 @@ impl<'a> Lexer<'a> {
                     break;
                 }
                 for token_kind in &self.token_kinds {
-                    // FIXME: A loooooot of unnecessary allocations
-                    /*if chars[i + j..]
-                        .iter()
-                        .map(|(_, char)| *char)
-                        .collect::<Vec<char>>()
-                        .starts_with(&token_kind.chars().collect::<Vec<char>>())
-                    {
-                        break 'word;
-                    }*/
                     let start = chars[i + j].0;
                     let end = if i + j + 1 < chars.len() {
                         chars[i + j + 1].0
@@ -162,6 +153,99 @@ impl<'a> Lexer<'a> {
             }
             tokens.push(Token {
                 index: chars[i].0,
+                len: j,
+                location: TextLocation::new(line, column),
+                kind: TokenKinds::Text,
+            });
+            column += j;
+            i += j;
+        }
+        tokens.push(Token {
+            index: i,
+            len: 0,
+            location: TextLocation::new(line, column),
+            kind: TokenKinds::Control(ControlTokenKind::Eof),
+        });
+        tokens
+    }
+
+    pub fn lex_ascii(&mut self) -> Vec<Token> {
+        let chars = self.text.chars().collect::<Vec<char>>();
+        let mut tokens = Vec::new();
+        let mut i = 0;
+        let mut line = 0;
+        let mut column = 0;
+        'chars: while i < chars.len() {
+            // Take new line into account
+            if chars[i] == '\n' {
+                line += 1;
+                column = 0;
+                i += 1;
+                tokens.push(Token {
+                    index: i,
+                    len: 1,
+                    location: TextLocation::new(line, column),
+                    kind: TokenKinds::Control(ControlTokenKind::Eol),
+                });
+                continue;
+            }
+
+            // Match token kinds
+            for token_kind in &self.token_kinds {
+                let mut token;
+                let mut j = 0;
+                while i + j < chars.len() {
+                    token = &self.text[i..i + j + 1];
+                    if token == *token_kind {
+                        tokens.push(Token {
+                            index: i,
+                            len: j + 1,
+                            location: TextLocation::new(line, column),
+                            kind: TokenKinds::Token(token.to_string()),
+                        });
+                        i += j + 1;
+                        column += j + 1;
+                        continue 'chars;
+                    }
+                    j += 1;
+                }
+            }
+
+            // Match whitespace
+            if chars[i].is_whitespace() {
+                tokens.push(Token {
+                    index: i,
+                    len: 1,
+                    location: TextLocation::new(line, column),
+                    kind: TokenKinds::Whitespace,
+                });
+                i += 1;
+                column += 1;
+                continue;
+            }
+
+            // Match text until next whitespace/token/eof
+            let mut j = 0;
+            'word: while i + j < chars.len() {
+                if chars[i + j].is_whitespace() {
+                    break;
+                }
+                for token_kind in &self.token_kinds {
+                    let start = i + j;
+                    let end = if i + j + 1 < chars.len() {
+                        i + j + 1
+                    } else {
+                        i + j
+                    };
+                    let token = &self.text[start..end];
+                    if token == *token_kind {
+                        break 'word;
+                    }
+                }
+                j += 1;
+            }
+            tokens.push(Token {
+                index: i,
                 len: j,
                 location: TextLocation::new(line, column),
                 kind: TokenKinds::Text,
