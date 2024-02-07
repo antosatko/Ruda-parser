@@ -87,7 +87,8 @@ impl<'a> Lexer<'a> {
         let mut i = 0;
         let mut line = 0;
         let mut column = 0;
-        'chars: while i < chars.len() {
+        let len = chars.len();
+        'chars: while i < len {
             // Take new line into account
             if chars[i].1 == '\n' {
                 line += 1;
@@ -106,20 +107,20 @@ impl<'a> Lexer<'a> {
             for token_kind in &self.token_kinds {
                 let mut token;
                 let mut j: usize = 0;
-                while i + j < chars.len() {
+                while i + j < len {
                     let start = chars[i].0;
-                    let end = if i + j + 1 < chars.len() {
+                    let end = if i + j + 1 < len {
                         chars[i + j + 1].0
                     } else {
                         chars[i + j].0 + chars[i + j].1.len_utf8()
                     };
-                    token = &self.text[start..end];
-                    if token == *token_kind {
+                    token = &self.text.as_bytes()[start..end];
+                    if token == token_kind.as_bytes(){
                         tokens.push(Token {
                             index: chars[i].0,
                             len: j + 1,
                             location: TextLocation::new(line, column),
-                            kind: TokenKinds::Token(token.to_string()),
+                            kind: TokenKinds::Token(token_kind.clone()),
                         });
                         i += j + 1;
                         column += j + 1;
@@ -144,19 +145,19 @@ impl<'a> Lexer<'a> {
 
             // Match text until next whitespace/token/eof
             let mut j = 0;
-            'word: while i + j < chars.len() {
+            'word: while i + j < len {
                 if chars[i + j].1.is_whitespace() {
                     break;
                 }
                 for token_kind in &self.token_kinds {
                     let start = chars[i + j].0;
-                    let end = if i + j + 1 < chars.len() {
+                    let end = if i + j + 1 < len {
                         chars[i + j + 1].0
                     } else {
                         chars[i + j].0 + chars[i + j].1.len_utf8()
                     };
-                    let token = &self.text[start..end];
-                    if token == *token_kind {
+                    let token = &self.text.as_bytes()[start..end];
+                    if token == token_kind.as_bytes() {
                         break 'word;
                     }
                 }
