@@ -2,7 +2,11 @@ use std::collections::HashMap;
 
 use crate::lexer::TokenKinds;
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct Grammar<'a> {
+    #[serde(skip_serializing, default)]
     pub(crate) text: &'a str,
     pub(crate) nodes: HashMap<String, Node>,
     pub(crate) enumerators: HashMap<String, Enumerator>,
@@ -32,6 +36,7 @@ pub type Rules = Vec<Rule>;
 /// It also contains parameters that can be used if the rule is matched
 ///
 /// Special kind of rules are commands that can be executed without matching a token
+#[derive(Serialize, Deserialize)]
 pub enum Rule {
     /// Matches a token
     ///
@@ -118,6 +123,7 @@ pub enum Rule {
 }
 
 /// Commands that can be executed
+#[derive(Serialize, Deserialize)]
 pub enum Commands {
     /// Compares two variables/numbers and executes rules if the comparison is true
     Compare {
@@ -147,6 +153,7 @@ pub enum Commands {
 
 /// Comparison operators
 #[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize)]
 pub enum Comparison {
     /// ==
     Equal,
@@ -166,6 +173,7 @@ pub enum Comparison {
 ///
 /// Can be a token kind or a node name
 #[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize)]
 pub enum MatchToken {
     /// A token kind
     Token(TokenKinds),
@@ -180,6 +188,7 @@ pub enum MatchToken {
 }
 
 /// A node is a collection of rules that will be executed when the node is matched
+#[derive(Serialize, Deserialize)]
 pub struct Node {
     /// Name of the node
     pub name: String,
@@ -190,6 +199,7 @@ pub struct Node {
 }
 
 /// A variable that can be used in a node
+#[derive(Serialize, Deserialize)]
 pub enum VariableKind {
     /// Holds a single node
     Node,
@@ -202,6 +212,7 @@ pub enum VariableKind {
 }
 
 /// Parameters that can be used on a rule if it is matched
+#[derive(Serialize, Deserialize)]
 pub enum Parameters {
     /// Sets a variable to a value
     Set(String),
@@ -250,6 +261,7 @@ pub enum Parameters {
     NodeEnd,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Enumerator {
     pub name: String,
     pub values: Vec<MatchToken>,

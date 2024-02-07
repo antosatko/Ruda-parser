@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 const DEFAULT_ENTRY: &str = "entry";
 
 use crate::{
@@ -7,7 +9,9 @@ use crate::{
     lexer::{Lexer, Token, TokenKinds},
 };
 
+#[derive(Serialize, Deserialize)]
 pub struct Parser<'a> {
+    #[serde(skip_serializing, default)]
     pub text: &'a str,
     pub entry: String,
 }

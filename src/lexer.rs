@@ -1,3 +1,7 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Result;
+
+#[derive(Serialize, Deserialize)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TokenKinds {
     /// A sequence of characters
@@ -10,21 +14,26 @@ pub enum TokenKinds {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Serialize, Deserialize)]
 pub enum ControlTokenKind {
     Eof,
     Eol,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Lexer<'a> {
     /// Reference to the text being lexed
+    #[serde(skip_serializing, default)]
     pub(crate) text: &'a str,
     /// Possible token kinds
     token_kinds: Vec<String>,
     /// Tokens that have been lexed
+    #[serde(skip_serializing, default)]
     pub tokens: Vec<Token>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Serialize, Deserialize)]
 pub struct Token {
     /// Index of the token in the text
     pub index: usize,
@@ -37,6 +46,7 @@ pub struct Token {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Serialize, Deserialize)]
 pub struct TextLocation {
     pub line: usize,
     pub column: usize,
@@ -70,6 +80,8 @@ impl<'a> Lexer<'a> {
         self.token_kinds.push(token);
     }
 
+
+    /// Lexer for UTF-8 text
     pub fn lex_utf8(&mut self) -> Vec<Token> {
         let chars = self.text.char_indices().collect::<Vec<(usize, char)>>();
         let mut tokens = Vec::new();
@@ -169,6 +181,9 @@ impl<'a> Lexer<'a> {
         tokens
     }
 
+    /// Lexer for ascii-only text
+    /// 
+    /// This results in almost 2x speed boost
     pub fn lex_ascii(&mut self) -> Vec<Token> {
         let chars = self.text.chars().collect::<Vec<char>>();
         let mut tokens = Vec::new();
