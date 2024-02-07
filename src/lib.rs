@@ -375,7 +375,6 @@ mod tests {
 
     #[test]
     fn workload_file() {
-        return;
         let meta = read_dotmeta();
         let mut parser = Parser::new();
         // let txt = include_str!("../workload.txt"); // The size of the file is 100MB which would make it impractical to include it in the tests

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
 
 #[derive(Serialize, Deserialize)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -182,17 +181,16 @@ impl<'a> Lexer<'a> {
     }
 
     /// Lexer for ascii-only text
-    /// 
-    /// This results in almost 2x speed boost
     pub fn lex_ascii(&mut self) -> Vec<Token> {
-        let chars = self.text.chars().collect::<Vec<char>>();
+        let chars = self.text.as_bytes();
         let mut tokens = Vec::new();
         let mut i = 0;
         let mut line = 0;
         let mut column = 0;
-        'chars: while i < chars.len() {
+        let len = chars.len();
+        'chars: while i < len {
             // Take new line into account
-            if chars[i] == '\n' {
+            if chars[i] == '\n' as u8 {
                 line += 1;
                 column = 0;
                 i += 1;
@@ -209,14 +207,14 @@ impl<'a> Lexer<'a> {
             for token_kind in &self.token_kinds {
                 let mut token;
                 let mut j = 0;
-                while i + j < chars.len() {
-                    token = &self.text[i..i + j + 1];
-                    if token == *token_kind {
+                while i + j < len {
+                    token = &chars[i..i + j + 1];
+                    if token == token_kind.as_bytes() {
                         tokens.push(Token {
                             index: i,
                             len: j + 1,
                             location: TextLocation::new(line, column),
-                            kind: TokenKinds::Token(token.to_string()),
+                            kind: TokenKinds::Token(token_kind.clone()),
                         });
                         i += j + 1;
                         column += j + 1;
@@ -227,7 +225,7 @@ impl<'a> Lexer<'a> {
             }
 
             // Match whitespace
-            if chars[i].is_whitespace() {
+            if (chars[i] as char).is_whitespace() {
                 tokens.push(Token {
                     index: i,
                     len: 1,
@@ -241,13 +239,13 @@ impl<'a> Lexer<'a> {
 
             // Match text until next whitespace/token/eof
             let mut j = 0;
-            'word: while i + j < chars.len() {
-                if chars[i + j].is_whitespace() {
+            'word: while i + j < len {
+                if (chars[i + j] as char).is_whitespace() {
                     break;
                 }
                 for token_kind in &self.token_kinds {
                     let start = i + j;
-                    let end = if i + j + 1 < chars.len() {
+                    let end = if i + j + 1 < len {
                         i + j + 1
                     } else {
                         i + j

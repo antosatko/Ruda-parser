@@ -4,9 +4,7 @@ use rparse::{grammar::*, lexer::TokenKinds, *};
 /// Fields are ordered according to the order of the lines in the meta file
 struct Meta {
     lines: usize,
-    line_length: usize,
-    size: usize,
-    name: String,
+    line_length: usize
 }
 
 fn read_dotmeta() -> Meta {
@@ -15,13 +13,9 @@ fn read_dotmeta() -> Meta {
     let mut lns = meta.lines();
     let lines = lns.next().unwrap().parse().unwrap();
     let line_length = lns.next().unwrap().parse().unwrap();
-    let size = lns.next().unwrap().parse().unwrap();
-    let name = lns.next().unwrap().to_string();
     Meta {
         lines,
         line_length,
-        size,
-        name,
     }
 }
 
@@ -35,7 +29,7 @@ fn main() {
     parser.lexer.add_token("\"".to_string());
 
     let lex_start = std::time::Instant::now();
-    let tokens = parser.lexer.lex();
+    let tokens = parser.lexer.lex_ascii();
     parser.lexer.tokens = tokens;
     println!("lex time: {:?}", lex_start.elapsed());
 
