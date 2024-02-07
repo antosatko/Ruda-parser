@@ -19,7 +19,7 @@ pub enum ControlTokenKind {
     Eol,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Lexer<'a> {
     /// Reference to the text being lexed
     #[serde(skip_serializing, default)]

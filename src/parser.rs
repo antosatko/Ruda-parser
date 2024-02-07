@@ -9,7 +9,7 @@ use crate::{
     lexer::{Lexer, Token, TokenKinds},
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Parser<'a> {
     #[serde(skip_serializing, default)]
     pub text: &'a str,

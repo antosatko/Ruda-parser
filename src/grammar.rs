@@ -4,7 +4,7 @@ use crate::lexer::TokenKinds;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Grammar<'a> {
     #[serde(skip_serializing, default)]
     pub(crate) text: &'a str,
@@ -36,7 +36,7 @@ pub type Rules = Vec<Rule>;
 /// It also contains parameters that can be used if the rule is matched
 ///
 /// Special kind of rules are commands that can be executed without matching a token
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Rule {
     /// Matches a token
     ///
@@ -123,7 +123,7 @@ pub enum Rule {
 }
 
 /// Commands that can be executed
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Commands {
     /// Compares two variables/numbers and executes rules if the comparison is true
     Compare {
@@ -188,7 +188,7 @@ pub enum MatchToken {
 }
 
 /// A node is a collection of rules that will be executed when the node is matched
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Node {
     /// Name of the node
     pub name: String,
@@ -199,7 +199,7 @@ pub struct Node {
 }
 
 /// A variable that can be used in a node
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VariableKind {
     /// Holds a single node
     Node,
@@ -212,7 +212,7 @@ pub enum VariableKind {
 }
 
 /// Parameters that can be used on a rule if it is matched
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Parameters {
     /// Sets a variable to a value
     Set(String),
@@ -261,7 +261,7 @@ pub enum Parameters {
     NodeEnd,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Enumerator {
     pub name: String,
     pub values: Vec<MatchToken>,

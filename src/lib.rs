@@ -5,7 +5,7 @@ pub mod parser;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Parser<'a> {
     #[serde(skip_serializing, default)]
     text: &'a str,
