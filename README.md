@@ -24,6 +24,26 @@ I intend to add a grammar file format in the future for easier configuration.
 
 This section will be updated once the parser is more stable.
 
+Until then, you can look at the tests in the `src/lib.rs` file to see how to use the parser.
+
+### Running the tests
+
+Before running the tests, make sure to run:
+
+```bash
+py genWorkload.py
+```
+
+This will generate a file called `workload.txt` which is used by the tests to test the parser. If it takes too long to run the tests, you can reduce the size of the file by changing global variables in the `genWorkload.py` file. (It took about 4 minutes to generate the file on my machine with the default settings.). This will generate a file with a size of about 1GB by default. (The script could be optimized better. It is just that I don't care enough to do it. It is just a test file after all.)
+
+Also run the tests more than once. This is because one of the tests creates a dump grammar file and other one uses it.
+
+You can use the following command:
+
+```bash
+cargo test --release # --release is optional but recommended since it could take longer to run the tests without it
+```
+
 ## Random thoughts
 
 This needs to be said. During the development of the parser, I realized that UTF-8 is evil. it is fully supported and will be supported in the future, but it is evil.
