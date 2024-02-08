@@ -1,3 +1,6 @@
+//! Test the parser with a large file
+//! 
+
 use std::collections::HashMap;
 
 use rparse::{grammar::*, lexer::TokenKinds, *};
@@ -20,19 +23,24 @@ fn read_dotmeta() -> Meta {
 }
 
 fn main() {
+    let mut time = std::time::Instant::now();
     let meta = read_dotmeta();
+    println!("meta read time: {:?}", time.elapsed());
+    time = std::time::Instant::now();
     let mut parser = Parser::new();
     // let txt = include_str!("../workload.txt"); // The size of the file is 100MB which would make it impractical to include it in the tests
     use std::fs;
     let txt = fs::read_to_string("../workload.txt").unwrap();
-    parser.set_text(&txt);
     parser.lexer.add_token("\"".to_string());
+    println!("lexer generated: {:?}", time.elapsed());
 
     let lex_start = std::time::Instant::now();
-    let tokens = parser.lexer.lex_ascii();
-    parser.lexer.tokens = tokens;
+    let tokens = parser.lexer.lex_utf8(&txt);
     println!("lex time: {:?}", lex_start.elapsed());
 
+
+    // gramamr generation
+    let time = std::time::Instant::now();
     let variables = HashMap::new();
     parser.grammar.add_node(
         grammar::Node {
@@ -90,15 +98,15 @@ fn main() {
             variables,
         },
     );
+    println!("grammar generation time: {:?}", time.elapsed());
 
     let parse_start = std::time::Instant::now();
-    let result = parser.parse().unwrap();
+    let result = parser.parse(&tokens, &txt).unwrap();
     let strings = result.entry.get_list("strings");
-    println!("strings: {}", strings.len());
     println!("parse time: {:?}", parse_start.elapsed());
     // verify the result
     assert_eq!(strings.len(), meta.lines);
     for s in strings {
-        assert_eq!(result.stringify_node(s).len(), meta.line_length);
+        assert_eq!(result.stringify_node(s, &txt).len(), meta.line_length);
     }
 }

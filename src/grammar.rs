@@ -5,18 +5,15 @@ use crate::lexer::TokenKinds;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Grammar<'a> {
-    #[serde(skip_serializing, default)]
-    pub(crate) text: &'a str,
+pub struct Grammar {
     pub(crate) nodes: HashMap<String, Node>,
     pub(crate) enumerators: HashMap<String, Enumerator>,
     pub(crate) globals: HashMap<String, VariableKind>,
 }
 
-impl<'a> Grammar<'a> {
-    pub fn new(text: &'a str) -> Grammar<'a> {
+impl Grammar {
+    pub fn new() -> Grammar {
         Grammar {
-            text,
             nodes: HashMap::new(),
             enumerators: HashMap::new(),
             globals: HashMap::new(),
@@ -107,9 +104,7 @@ pub enum Rule {
         parameters: Vec<Parameters>,
     },
     /// Loop that will be executed until a break command is executed
-    Loop {
-        rules: Rules,
-    },
+    Loop { rules: Rules },
     /// Searches in the tokens until a token is matched
     Until {
         token: MatchToken,
@@ -152,8 +147,7 @@ pub enum Commands {
 }
 
 /// Comparison operators
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Comparison {
     /// ==
     Equal,
@@ -172,8 +166,7 @@ pub enum Comparison {
 /// A token that will be matched
 ///
 /// Can be a token kind or a node name
-#[derive(Clone, Debug)]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MatchToken {
     /// A token kind
     Token(TokenKinds),
@@ -184,7 +177,7 @@ pub enum MatchToken {
     /// An enumerator
     Enumerator(String),
     /// Any token
-    Any
+    Any,
 }
 
 /// A node is a collection of rules that will be executed when the node is matched
@@ -252,9 +245,9 @@ pub enum Parameters {
     /// Sets the current node to the label with the given name
     Goto(String),
     /// Hints to the parser that the node starts here
-    /// 
+    ///
     /// This should be used at the start of every node
-    /// because it will prevent the parser from counting 
+    /// because it will prevent the parser from counting
     /// whitespace in front of the node
     NodeStart,
     /// Hints to the parser that the node ends here

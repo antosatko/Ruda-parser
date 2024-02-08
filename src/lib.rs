@@ -6,36 +6,29 @@ pub mod parser;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Parser<'a> {
-    #[serde(skip_serializing, default)]
-    text: &'a str,
-    pub lexer: lexer::Lexer<'a>,
-    pub grammar: grammar::Grammar<'a>,
-    pub parser: parser::Parser<'a>,
+pub struct Parser {
+    pub lexer: lexer::Lexer,
+    pub grammar: grammar::Grammar,
+    pub parser: parser::Parser,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new() -> Parser<'static> {
-        let text = "";
-        let lexer = lexer::Lexer::new(text);
-        let grammar = grammar::Grammar::new(text);
+impl Parser {
+    pub fn new() -> Parser {
+        let lexer = lexer::Lexer::new();
+        let grammar = grammar::Grammar::new();
         Parser {
-            text,
             lexer,
             grammar,
-            parser: parser::Parser::new(text),
+            parser: parser::Parser::new(),
         }
     }
 
-    pub fn set_text(&mut self, text: &'a str) {
-        self.text = text;
-        self.lexer.text = text;
-        self.grammar.text = text;
-        self.parser.text = text;
-    }
-
-    pub fn parse(&mut self) -> Result<parser::ParseResult, parser::ParseError> {
-        self.parser.parse(&self.grammar, &self.lexer)
+    pub fn parse(
+        &self,
+        tokens: &Vec<lexer::Token>,
+        text: &str,
+    ) -> Result<parser::ParseResult, parser::ParseError> {
+        self.parser.parse(&self.grammar, &self.lexer, text, tokens)
     }
 }
 
@@ -55,7 +48,7 @@ mod tests {
     #[test]
     fn arithmetic_tokens() {
         let mut parser = Parser::new();
-        parser.set_text("Function 1 +\n 2 * 3 - 4 /= 5");
+        let txt = "Function 1 +\n 2 * 3 - 4 /= 5";
         // Tokens that will be recognized by the lexer
         //
         // White space is ignored by default
@@ -70,7 +63,7 @@ mod tests {
         ]);
 
         // Parse the text
-        let tokens = parser.lexer.lex_utf8();
+        let tokens = parser.lexer.lex_utf8(txt);
 
         assert_eq!(tokens.len(), 21);
     }
@@ -79,7 +72,6 @@ mod tests {
     fn stringify() {
         let mut parser = Parser::new();
         let txt = "Functiond\t 1 +\n 2 * 3 - 4 /= 5";
-        parser.set_text(txt);
         // Tokens that will be recognized by the lexer
         //
         // White space is ignored by default
@@ -94,42 +86,35 @@ mod tests {
         ]);
 
         // Parse the text
-        let tokens = parser.lexer.lex_utf8();
+        let tokens = parser.lexer.lex_utf8(txt);
 
-        assert_eq!(parser.lexer.stringify_slice(&tokens), txt);
-        assert_eq!(parser.lexer.stringify_slice(&tokens[0..1]), "Function");
-        assert_eq!(parser.lexer.stringify_slice(&tokens[1..5]), "d\t 1");
-
-        // invalidate the result by changing the text
-        parser.set_text("bad text");
-
-        assert_ne!(parser.lexer.stringify_slice(&tokens), txt);
+        assert_eq!(parser.lexer.stringify_slice(&tokens, txt), txt);
+        assert_eq!(parser.lexer.stringify_slice(&tokens[0..1], txt), "Function");
+        assert_eq!(parser.lexer.stringify_slice(&tokens[1..5], txt), "d\t 1");
     }
 
     #[test]
     fn unfinished_token() {
         let mut parser = Parser::new();
-        parser.set_text("fun");
+        let txt = "fun";
         parser.lexer.add_token("function".to_string());
-        let tokens = parser.lexer.lex_utf8();
+        let tokens = parser.lexer.lex_utf8(txt);
         assert_eq!(tokens[0].kind, TokenKinds::Text);
     }
 
     #[test]
     fn rules() {
         let mut parser = Parser::new();
-        parser.set_text("let   danda=  1+60;");
+        let txt = "let   danda=  1+60;";
         parser.lexer.add_token("=".to_string());
-        parser.lexer.add_token(";".to_string());
         parser.lexer.add_token(":".to_string());
         parser.lexer.add_token("+".to_string());
+        parser.lexer.add_token(";".to_string());
         parser.lexer.add_token("-".to_string());
         parser.lexer.add_token("*".to_string());
         parser.lexer.add_token("/".to_string());
 
-        let tokens = parser.lexer.lex_utf8();
-
-        parser.lexer.tokens = tokens;
+        let tokens = parser.lexer.lex_utf8(txt);
 
         let mut variables = HashMap::new();
         variables.insert("ident".to_string(), VariableKind::Node);
@@ -233,12 +218,12 @@ mod tests {
             Err(err) => panic!("Failed to dump grammar: {}", err),
         }
 
-        parser.parse().unwrap();
+        parser.parse(&tokens, txt).unwrap();
     }
 
     #[test]
     fn string() {
-        let str = r#"
+        let txt = r#"
 
 
 "úťf-8 štring"
@@ -246,7 +231,6 @@ mod tests {
 "#;
 
         let mut parser = Parser::new();
-        parser.set_text(str);
         parser.lexer.add_token("\"".to_string());
 
         // add random tokens to test the lexer
@@ -265,8 +249,7 @@ mod tests {
         parser.lexer.add_token("string".to_string());
         parser.lexer.add_token(" ".to_string());
 
-        let tokens = parser.lexer.lex_utf8();
-        parser.lexer.tokens = tokens;
+        let tokens = parser.lexer.lex_utf8(txt);
 
         let mut variables = HashMap::new();
         variables.insert("start".to_string(), VariableKind::Node);
@@ -321,15 +304,18 @@ mod tests {
             variables,
         });
 
-        let result = parser.parse().unwrap();
+        let result = parser.parse(&tokens, txt).unwrap();
         let strings = result.entry.get_list("strings");
         assert_eq!(strings.len(), 2);
 
         // first string
-        assert_eq!(result.stringify_node(&strings[0]), r#""úťf-8 štring""#);
+        assert_eq!(result.stringify_node(&strings[0], txt), r#""úťf-8 štring""#);
 
         // second string
-        assert_eq!(result.stringify_node(&strings[1]), r#""second string""#);
+        assert_eq!(
+            result.stringify_node(&strings[1], txt),
+            r#""second string""#
+        );
     }
 
     #[test]
@@ -353,8 +339,6 @@ mod tests {
     struct Meta {
         lines: usize,
         line_length: usize,
-        size: usize,
-        name: String,
     }
 
     fn read_dotmeta() -> Meta {
@@ -363,14 +347,7 @@ mod tests {
         let mut lns = meta.lines();
         let lines = lns.next().unwrap().parse().unwrap();
         let line_length = lns.next().unwrap().parse().unwrap();
-        let size = lns.next().unwrap().parse().unwrap();
-        let name = lns.next().unwrap().to_string();
-        Meta {
-            lines,
-            line_length,
-            size,
-            name,
-        }
+        Meta { lines, line_length }
     }
 
     #[test]
@@ -380,12 +357,10 @@ mod tests {
         // let txt = include_str!("../workload.txt"); // The size of the file is 100MB which would make it impractical to include it in the tests
         use std::fs;
         let txt = fs::read_to_string("workload.txt").unwrap();
-        parser.set_text(&txt);
         parser.lexer.add_token("\"".to_string());
 
         let lex_start = std::time::Instant::now();
-        let tokens = parser.lexer.lex_ascii();
-        parser.lexer.tokens = tokens;
+        let tokens = parser.lexer.lex_utf8(&txt);
         println!("lex time: {:?}", lex_start.elapsed());
 
         let variables = HashMap::new();
@@ -440,14 +415,14 @@ mod tests {
         });
 
         let parse_start = std::time::Instant::now();
-        let result = parser.parse().unwrap();
+        let result = parser.parse(&tokens, &txt).unwrap();
         let strings = result.entry.get_list("strings");
         println!("strings: {}", strings.len());
         println!("parse time: {:?}", parse_start.elapsed());
         // verify the result
         assert_eq!(strings.len(), meta.lines);
         for s in strings {
-            assert_eq!(result.stringify_node(s).len(), meta.line_length);
+            assert_eq!(result.stringify_node(s, &txt).len(), meta.line_length);
         }
     }
 
@@ -461,15 +436,16 @@ mod tests {
 
         let mut parser: Parser = serde_json::from_str(&parser).unwrap();
 
-        parser.set_text("let a: int = 500 * 9;");
+        let txt = "let a: int = 500 * 9;";
 
-        let tokens = parser.lexer.lex_utf8();
-        parser.lexer.tokens = tokens;
+        let tokens = parser.lexer.lex_utf8(txt);
 
-        let result = parser.parse().unwrap();
+        println!("{:#?}", tokens);
+
+        let result = parser.parse(&tokens, txt).unwrap();
 
         assert_eq!(
-            result.stringify_node(result.entry.try_get_node("value").as_ref().unwrap()),
+            result.stringify_node(result.entry.try_get_node("value").as_ref().unwrap(), txt),
             " 500 * 9"
         );
     }

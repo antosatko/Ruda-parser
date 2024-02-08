@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TokenKinds {
     /// A sequence of characters
     Token(String),
@@ -12,27 +11,20 @@ pub enum TokenKinds {
     Control(ControlTokenKind),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub enum ControlTokenKind {
     Eof,
     Eol,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Lexer<'a> {
-    /// Reference to the text being lexed
-    #[serde(skip_serializing, default)]
-    pub(crate) text: &'a str,
+pub struct Lexer {
     /// Possible token kinds
     token_kinds: Vec<String>,
-    /// Tokens that have been lexed
-    #[serde(skip_serializing, default)]
-    pub tokens: Vec<Token>,
+    longest_token_size: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct Token {
     /// Index of the token in the text
     pub index: usize,
@@ -44,8 +36,7 @@ pub struct Token {
     pub kind: TokenKinds,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct TextLocation {
     pub line: usize,
     pub column: usize,
@@ -59,35 +50,52 @@ impl TextLocation {
     }
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(text: &'a str) -> Lexer<'a> {
+impl Lexer {
+    pub fn new() -> Lexer {
         Lexer {
-            text,
             token_kinds: Vec::new(),
-            tokens: Vec::new(),
+            longest_token_size: 0,
         }
     }
 
     pub fn add_tokens(&mut self, tokens: &[String]) {
         self.token_kinds.reserve(tokens.len());
         for token in tokens {
-            self.token_kinds.push(token.clone());
+            if token.len() > self.longest_token_size {
+                self.longest_token_size = token.len();
+            }
+            self.add_token(token.clone());
         }
     }
 
     pub fn add_token(&mut self, token: String) {
-        self.token_kinds.push(token);
+        if token.len() > self.longest_token_size {
+            self.longest_token_size = token.len();
+        }
+        // find the right place to insert the token
+        //
+        //  1. find the first token that is longer than the new token
+        //  2. insert the new token before the first token that is longer
+        //
+        // This way the tokens are sorted by length
+        // This is important for optimization of the lexer
+        let index = self
+            .token_kinds
+            .iter()
+            .position(|x| x.len() > token.len())
+            .unwrap_or(self.token_kinds.len());
+        self.token_kinds.insert(index, token);
     }
 
-
     /// Lexer for UTF-8 text
-    pub fn lex_utf8(&mut self) -> Vec<Token> {
-        let chars = self.text.char_indices().collect::<Vec<(usize, char)>>();
-        let mut tokens = Vec::new();
+    pub fn lex_utf8(&self, text: &str) -> Vec<Token> {
+        let chars = text.char_indices().collect::<Vec<(usize, char)>>();
+        let len = chars.len();
+        // the allocation is a guess, but it should be close enough
+        let mut tokens = Vec::with_capacity(chars.len() / 4);
         let mut i = 0;
         let mut line = 0;
         let mut column = 0;
-        let len = chars.len();
         'chars: while i < len {
             // Take new line into account
             if chars[i].1 == '\n' {
@@ -105,28 +113,24 @@ impl<'a> Lexer<'a> {
 
             // Match token kinds
             for token_kind in &self.token_kinds {
-                let mut token;
-                let mut j: usize = 0;
-                while i + j < len {
-                    let start = chars[i].0;
-                    let end = if i + j + 1 < len {
-                        chars[i + j + 1].0
-                    } else {
-                        chars[i + j].0 + chars[i + j].1.len_utf8()
-                    };
-                    token = &self.text.as_bytes()[start..end];
-                    if token == token_kind.as_bytes(){
-                        tokens.push(Token {
-                            index: chars[i].0,
-                            len: j + 1,
-                            location: TextLocation::new(line, column),
-                            kind: TokenKinds::Token(token_kind.clone()),
-                        });
-                        i += j + 1;
-                        column += j + 1;
-                        continue 'chars;
-                    }
-                    j += 1;
+                let tok_len = token_kind.len();
+                if i + tok_len >= len {
+                    // All the remaining tokens are longer than the remaining text
+                    //
+                    // This is a performance optimization
+                    break;
+                }
+                let token = &text[chars[i].0..chars[i + tok_len].0];
+                if token == *token_kind {
+                    tokens.push(Token {
+                        index: chars[i].0,
+                        len: tok_len,
+                        location: TextLocation::new(line, column),
+                        kind: TokenKinds::Token(token_kind.clone()),
+                    });
+                    i += tok_len;
+                    column += tok_len;
+                    continue 'chars;
                 }
             }
 
@@ -149,19 +153,20 @@ impl<'a> Lexer<'a> {
                 if chars[i + j].1.is_whitespace() {
                     break;
                 }
+                j += chars[i + j].1.len_utf8();
                 for token_kind in &self.token_kinds {
-                    let start = chars[i + j].0;
-                    let end = if i + j + 1 < len {
-                        chars[i + j + 1].0
+                    let start = i + j;
+                    let tok_len = token_kind.chars().count();
+                    let end = if i + j + tok_len < len {
+                        i + j + tok_len
                     } else {
-                        chars[i + j].0 + chars[i + j].1.len_utf8()
+                        break 'word;
                     };
-                    let token = &self.text.as_bytes()[start..end];
-                    if token == token_kind.as_bytes() {
+                    let token = &text[chars[start].0..chars[end].0];
+                    if token == *token_kind {
                         break 'word;
                     }
                 }
-                j += 1;
             }
             tokens.push(Token {
                 index: chars[i].0,
@@ -182,9 +187,10 @@ impl<'a> Lexer<'a> {
     }
 
     /// Lexer for ascii-only text
-    pub fn lex_ascii(&mut self) -> Vec<Token> {
-        let chars = self.text.as_bytes();
-        let mut tokens = Vec::new();
+    pub fn lex_ascii(&mut self, text: &str) -> Vec<Token> {
+        let chars = text.as_bytes();
+        // the allocation is a guess, but it should be close enough
+        let mut tokens = Vec::with_capacity(chars.len() / 4);
         let mut i = 0;
         let mut line = 0;
         let mut column = 0;
@@ -204,24 +210,25 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
-            // Match token kinds
             for token_kind in &self.token_kinds {
-                let mut token;
-                let mut j = 0;
-                while i + j < len {
-                    token = &chars[i..i + j + 1];
-                    if token == token_kind.as_bytes() {
-                        tokens.push(Token {
-                            index: i,
-                            len: j + 1,
-                            location: TextLocation::new(line, column),
-                            kind: TokenKinds::Token(token_kind.clone()),
-                        });
-                        i += j + 1;
-                        column += j + 1;
-                        continue 'chars;
-                    }
-                    j += 1;
+                let tok_len = token_kind.len();
+                if i + tok_len > len {
+                    // All the remaining tokens are longer than the remaining text
+                    //
+                    // This is a performance optimization
+                    break;
+                }
+                let token = &chars[i..i + tok_len];
+                if token == token_kind.as_bytes() {
+                    tokens.push(Token {
+                        index: i,
+                        len: tok_len,
+                        location: TextLocation::new(line, column),
+                        kind: TokenKinds::Token(token_kind.clone()),
+                    });
+                    i += tok_len;
+                    column += tok_len;
+                    continue 'chars;
                 }
             }
 
@@ -244,19 +251,20 @@ impl<'a> Lexer<'a> {
                 if (chars[i + j] as char).is_whitespace() {
                     break;
                 }
+                j += 1;
                 for token_kind in &self.token_kinds {
                     let start = i + j;
-                    let end = if i + j + 1 < len {
-                        i + j + 1
+                    let tok_len = token_kind.len();
+                    let end = if i + j + tok_len <= len {
+                        i + j + tok_len
                     } else {
-                        i + j
+                        break 'word;
                     };
-                    let token = &self.text[start..end];
+                    let token = &text[start..end];
                     if token == *token_kind {
                         break 'word;
                     }
                 }
-                j += 1;
             }
             tokens.push(Token {
                 index: i,
@@ -267,6 +275,7 @@ impl<'a> Lexer<'a> {
             column += j;
             i += j;
         }
+
         tokens.push(Token {
             index: i,
             len: 0,
@@ -277,25 +286,25 @@ impl<'a> Lexer<'a> {
     }
 
     /// Takes a slice of tokens and returns a string of the text
-    pub fn stringify_slice(&self, tokens: &[Token]) -> String {
+    pub fn stringify_slice<'a>(&self, tokens: &[Token], text: &'a str) -> &'a str {
         let start = match tokens.first() {
             Some(token) => token.index,
-            None => return String::new(),
+            None => return "",
         };
         let end = match tokens.last() {
             Some(token) => token.index + token.len,
-            None => return String::new(),
+            None => return "",
         };
         if start >= end {
-            return String::new();
+            return "";
         }
-        if end > self.text.len() {
-            return String::new();
+        if end > text.len() {
+            return "";
         }
-        self.text[start..end].to_string()
+        &text[start..end]
     }
 
-    pub fn stringify(&self, token: &Token) -> String {
-        self.text[token.index..token.index + token.len].to_string()
+    pub fn stringify<'a>(&self, token: &Token, text: &'a str) -> &'a str {
+        &text[token.index..token.index + token.len]
     }
 }

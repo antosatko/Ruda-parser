@@ -1,8 +1,9 @@
-# Generates a workload for the string matching problem (100kB)
+# Generates a workload for the string matching problem
 #
 # The data is generated in the following format:
-#   - 10,000 lines
-#   - Each line has 100 characters
+#   - 10,000,000 lines
+#   - Each line is 100 characters long
+#   - This is a total of 1,000,000,000 characters or 1GB of data
 #   - Each character is a random letter (a-z)
 #   - Each line is terminated with a newline character
 #   - Each line starts and ends with a double quote character (")
@@ -19,7 +20,7 @@ import random
 import string
 import time
 
-lines = 10000
+lines = 10000000
 lineLength = 100
 fileSize = lines * lineLength
 
@@ -35,8 +36,8 @@ def randomLine(n):
 # Generate 1,000 lines of random data
 def generateData():
     with open('workload.txt', 'w') as f:
-        for i in range(10000):
-            f.write(randomLine(100) + '\n')
+        for i in range(lines):
+            f.write(randomLine(lineLength) + '\n')
 
 def generateMeta():
     with open('workload.meta', 'w') as f:
