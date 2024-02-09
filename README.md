@@ -13,7 +13,7 @@ I intend to add a grammar file format in the future for easier configuration.
 - [x] Parse text using a dumped json file
 - [x] Parse text using the `Parser` class
 - [ ] Parse text using a custom grammar
-- [x] Switch between different file formats
+- [x] Switch between different file encodings
     - [x] ASCII
     - [x] UTF-8
 - [ ] WASM support
