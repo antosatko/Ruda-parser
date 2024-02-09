@@ -1,7 +1,14 @@
+#![no_std]
+
 pub mod api;
 pub mod grammar;
 pub mod lexer;
 pub mod parser;
+
+pub extern crate alloc;
+
+use alloc::vec::Vec;
+
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::collections::BTreeMap;
 
 use crate::lexer::TokenKinds;
 
@@ -6,17 +8,17 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Grammar {
-    pub(crate) nodes: HashMap<String, Node>,
-    pub(crate) enumerators: HashMap<String, Enumerator>,
-    pub(crate) globals: HashMap<String, VariableKind>,
+    pub(crate) nodes: BTreeMap<String, Node>,
+    pub(crate) enumerators: BTreeMap<String, Enumerator>,
+    pub(crate) globals: BTreeMap<String, VariableKind>,
 }
 
 impl Grammar {
     pub fn new() -> Grammar {
         Grammar {
-            nodes: HashMap::new(),
-            enumerators: HashMap::new(),
-            globals: HashMap::new(),
+            nodes: BTreeMap::new(),
+            enumerators: BTreeMap::new(),
+            globals: BTreeMap::new(),
         }
     }
 
@@ -188,7 +190,7 @@ pub struct Node {
     /// Rules that will be executed when the node is matched
     pub rules: Rules,
     /// Variables that can be used in the node and will be accessible from the outside
-    pub variables: HashMap<String, VariableKind>,
+    pub variables: BTreeMap<String, VariableKind>,
 }
 
 /// A variable that can be used in a node

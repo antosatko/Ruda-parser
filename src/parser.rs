@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use alloc::vec;
+use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::string::{String, ToString};
 
 use serde::{Deserialize, Serialize};
 
@@ -52,7 +54,7 @@ impl Parser {
         lexer: &Lexer,
         name: &str,
         cursor: &mut Cursor,
-        globals: &mut HashMap<String, VariableKind>,
+        globals: &mut BTreeMap<String, VariableKind>,
         tokens: &Vec<Token>,
         text: &str,
     ) -> Result<Node, (ParseError, Node)> {
@@ -104,7 +106,7 @@ impl Parser {
         lexer: &Lexer,
         rules: &Vec<grammar::Rule>,
         cursor: &mut Cursor,
-        globals: &mut HashMap<String, VariableKind>,
+        globals: &mut BTreeMap<String, VariableKind>,
         cursor_clone: &Cursor,
         node: &mut Node,
         tokens: &Vec<Token>,
@@ -651,7 +653,7 @@ impl Parser {
         lexer: &Lexer,
         token: &grammar::MatchToken,
         cursor: &mut Cursor,
-        globals: &mut HashMap<String, VariableKind>,
+        globals: &mut BTreeMap<String, VariableKind>,
         cursor_clone: &Cursor,
         tokens: &Vec<Token>,
         text: &str,
@@ -752,7 +754,7 @@ impl Parser {
         lexer: &Lexer,
         parameters: &Vec<grammar::Parameters>,
         cursor: &mut Cursor,
-        globals: &mut HashMap<String, VariableKind>,
+        globals: &mut BTreeMap<String, VariableKind>,
         _cursor_clone: &Cursor,
         node: &mut Node,
         value: Nodes,
@@ -784,17 +786,17 @@ impl Parser {
                         ))?,
                     };
                 }
-                grammar::Parameters::Print(str) => println!("{}", str),
+                grammar::Parameters::Print(str) => todo!("{}", str),
                 grammar::Parameters::Debug(variable) => match variable {
                     Some(ident) => {
                         let kind = match node.variables.get(ident) {
                             Some(kind) => kind,
                             None => return Err(ParseError::VariableNotFound(ident.to_string())),
                         };
-                        println!("{:?}", kind);
+                        todo!("{:?}", kind);
                     }
                     None => {
-                        println!("{:?}", lexer.stringify(&tokens[cursor.idx], text));
+                        todo!("{:?}", lexer.stringify(&tokens[cursor.idx], text));
                     }
                 },
                 grammar::Parameters::Increment(ident) => {
@@ -979,7 +981,7 @@ enum TokenCompare {
 #[derive(Debug)]
 pub struct ParseResult {
     pub entry: Node,
-    pub globals: HashMap<String, VariableKind>,
+    pub globals: BTreeMap<String, VariableKind>,
 }
 
 #[derive(Debug, Clone)]
@@ -991,7 +993,7 @@ pub enum Nodes {
 #[derive(Debug, Clone)]
 pub struct Node {
     pub name: String,
-    pub variables: HashMap<String, VariableKind>,
+    pub variables: BTreeMap<String, VariableKind>,
     pub(crate) first_string_idx: usize,
     pub(crate) last_string_idx: usize,
     pub(crate) harderror: bool,
@@ -1001,7 +1003,7 @@ impl Node {
     pub fn new(name: String) -> Node {
         Node {
             name,
-            variables: HashMap::new(),
+            variables: BTreeMap::new(),
             first_string_idx: 0,
             last_string_idx: 0,
             harderror: false,
@@ -1019,9 +1021,9 @@ impl Node {
     }
 
     pub fn variables_from_grammar(
-        variables: &HashMap<String, grammar::VariableKind>,
-    ) -> Result<HashMap<String, VariableKind>, ParseError> {
-        let mut result = HashMap::new();
+        variables: &BTreeMap<String, grammar::VariableKind>,
+    ) -> Result<BTreeMap<String, VariableKind>, ParseError> {
+        let mut result = BTreeMap::new();
         for (key, value) in variables {
             let var = match value {
                 crate::grammar::VariableKind::Node => VariableKind::Node(None),
@@ -1082,8 +1084,8 @@ pub enum ParseError {
     CannotBreak(usize),
 }
 
-impl std::fmt::Debug for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for ParseError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             ParseError::ParserNotFullyImplemented => write!(f, "Parser not fully implemented"),
             ParseError::NodeNotFound(name) => write!(f, "Node not found: {}", name),

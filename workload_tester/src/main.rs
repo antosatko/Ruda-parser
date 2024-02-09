@@ -1,7 +1,7 @@
 //! Test the parser with a large file
 //! 
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use rparse::{grammar::*, lexer::TokenKinds, *};
 /// Fields are ordered according to the order of the lines in the meta file
@@ -35,13 +35,13 @@ fn main() {
     println!("lexer generated: {:?}", time.elapsed());
 
     let lex_start = std::time::Instant::now();
-    let tokens = parser.lexer.lex_utf8(&txt);
+    let tokens = parser.lexer.lex_ascii(&txt);
     println!("lex time: {:?}", lex_start.elapsed());
 
 
     // gramamr generation
     let time = std::time::Instant::now();
-    let variables = HashMap::new();
+    let variables = BTreeMap::new();
     parser.grammar.add_node(
         grammar::Node {
             name: "string".to_string(),
@@ -65,7 +65,7 @@ fn main() {
         },
     );
 
-    let mut variables = HashMap::new();
+    let mut variables = BTreeMap::new();
     variables.insert("strings".to_string(), VariableKind::NodeList);
     variables.insert("count".to_string(), VariableKind::Number);
     variables.insert("zero".to_string(), VariableKind::Number);
