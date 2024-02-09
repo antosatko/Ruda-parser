@@ -3,9 +3,6 @@ use crate::{
     parser::{self},
 };
 
-
-use alloc::vec::Vec;
-
 impl<'a> parser::Nodes {
     /// Returns name of node
     ///
@@ -115,7 +112,7 @@ impl<'a> parser::Node {
     pub fn try_get_node(&self, variable: &str) -> &Option<parser::Nodes> {
         match self.variables.get(variable) {
             Some(node) => match &node {
-                parser::VariableKind::Node(node) => node,
+                &parser::VariableKind::Node(node) => node,
                 _ => panic!(
                     "Variable {} is not a node for node: {:?}",
                     variable, self.name
@@ -131,7 +128,7 @@ impl<'a> parser::Node {
     pub fn get_list(&self, variable: &str) -> &Vec<parser::Nodes> {
         match self.variables.get(variable) {
             Some(array) => match &array {
-                parser::VariableKind::NodeList(array) => array,
+                &parser::VariableKind::NodeList(array) => array,
                 _ => panic!(
                     "Variable {} is not an array for node: {:?}",
                     variable, self.name

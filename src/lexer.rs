@@ -1,9 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
-use alloc::vec::Vec;
-use alloc::string::String;
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TokenKinds {
     /// A sequence of characters
