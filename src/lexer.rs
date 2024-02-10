@@ -11,10 +11,34 @@ pub enum TokenKinds {
     Control(ControlTokenKind),
 }
 
+impl TokenKinds {
+    pub fn is_whitespace(&self) -> bool {
+        match self {
+            TokenKinds::Whitespace => true,
+            TokenKinds::Control(ControlTokenKind::Eol) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub enum ControlTokenKind {
     Eof,
     Eol,
+}
+
+pub type Preprocessor = fn(text: &str, tokens: Vec<Token>) -> Result<Vec<Token>, PreprocessorError>;
+
+pub struct PreprocessorError {
+    pub message: String,
+    pub location: TextLocation,
+    pub len: usize,
+}
+
+impl std::fmt::Debug for PreprocessorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "An error occurred during lexing at line {} column {}: {}", self.location.line, self.location.column, self.message)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -22,6 +46,8 @@ pub struct Lexer {
     /// Possible token kinds
     token_kinds: Vec<String>,
     longest_token_size: usize,
+    #[serde(skip, default)]
+    pub preprocessors: Vec<Preprocessor>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
@@ -55,6 +81,7 @@ impl Lexer {
         Lexer {
             token_kinds: Vec::new(),
             longest_token_size: 0,
+            preprocessors: Vec::new(),
         }
     }
 
@@ -88,7 +115,7 @@ impl Lexer {
     }
 
     /// Lexer for UTF-8 text
-    pub fn lex_utf8(&self, text: &str) -> Vec<Token> {
+    pub fn lex_utf8(&self, text: &str) -> Result<Vec<Token>, PreprocessorError> {
         let chars = text.char_indices().collect::<Vec<(usize, char)>>();
         let len = chars.len();
         // the allocation is a guess, but it should be close enough
@@ -183,11 +210,16 @@ impl Lexer {
             location: TextLocation::new(line, column),
             kind: TokenKinds::Control(ControlTokenKind::Eof),
         });
-        tokens
+
+        for preprocessor in &self.preprocessors {
+            tokens = preprocessor(text, tokens)?;
+        }
+
+        Ok(tokens)
     }
 
     /// Lexer for ascii-only text
-    pub fn lex_ascii(&mut self, text: &str) -> Vec<Token> {
+    pub fn lex_ascii(&mut self, text: &str) -> Result<Vec<Token>, PreprocessorError> {
         let chars = text.as_bytes();
         // the allocation is a guess, but it should be close enough
         let mut tokens = Vec::with_capacity(chars.len() / 4);
@@ -282,7 +314,12 @@ impl Lexer {
             location: TextLocation::new(line, column),
             kind: TokenKinds::Control(ControlTokenKind::Eof),
         });
-        tokens
+
+        for preprocessor in &self.preprocessors {
+            tokens = preprocessor(text, tokens)?;
+        }
+
+        Ok(tokens)
     }
 
     /// Takes a slice of tokens and returns a string of the text

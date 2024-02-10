@@ -35,6 +35,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruda"
+version = "0.1.0"
+dependencies = [
+ "rparse",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ryu"
 version = "1.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"

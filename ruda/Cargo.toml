@@ -1,0 +1,9 @@
+[package]
+name = "ruda"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rparse = { path = "../" }
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"

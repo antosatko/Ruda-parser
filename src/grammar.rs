@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Grammar {
-    pub(crate) nodes: HashMap<String, Node>,
-    pub(crate) enumerators: HashMap<String, Enumerator>,
-    pub(crate) globals: HashMap<String, VariableKind>,
+    pub nodes: HashMap<String, Node>,
+    pub enumerators: HashMap<String, Enumerator>,
+    pub globals: HashMap<String, VariableKind>,
 }
 
 impl Grammar {
@@ -61,7 +61,7 @@ pub enum Rule {
     ///
     /// If none of the tokens is matched, the node will end with an error
     IsOneOf {
-        tokens: Vec<(MatchToken, Rules, Vec<Parameters>)>,
+        tokens: Vec<OneOf>,
     },
     /// Matches a token
     ///
@@ -117,6 +117,14 @@ pub enum Rule {
     Command { command: Commands },
 }
 
+/// One of the tokens that will be matched
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OneOf {
+    pub token: MatchToken,
+    pub rules: Rules,
+    pub parameters: Vec<Parameters>,
+}
+
 /// Commands that can be executed
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Commands {
@@ -143,6 +151,9 @@ pub enum Commands {
     },
     Label {
         name: String,
+    },
+    Print {
+        message: String,
     },
 }
 

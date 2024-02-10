@@ -63,7 +63,7 @@ mod tests {
         ]);
 
         // Parse the text
-        let tokens = parser.lexer.lex_utf8(txt);
+        let tokens = parser.lexer.lex_utf8(txt).unwrap();
 
         assert_eq!(tokens.len(), 21);
     }
@@ -86,7 +86,7 @@ mod tests {
         ]);
 
         // Parse the text
-        let tokens = parser.lexer.lex_utf8(txt);
+        let tokens = parser.lexer.lex_utf8(txt).unwrap();
 
         assert_eq!(parser.lexer.stringify_slice(&tokens, txt), txt);
         assert_eq!(parser.lexer.stringify_slice(&tokens[0..1], txt), "Function");
@@ -98,7 +98,7 @@ mod tests {
         let mut parser = Parser::new();
         let txt = "fun";
         parser.lexer.add_token("function".to_string());
-        let tokens = parser.lexer.lex_utf8(txt);
+        let tokens = parser.lexer.lex_utf8(txt).unwrap();
         assert_eq!(tokens[0].kind, TokenKinds::Text);
     }
 
@@ -114,7 +114,7 @@ mod tests {
         parser.lexer.add_token("*".to_string());
         parser.lexer.add_token("/".to_string());
 
-        let tokens = parser.lexer.lex_utf8(txt);
+        let tokens = parser.lexer.lex_utf8(txt).unwrap();
 
         let mut variables = HashMap::new();
         variables.insert("ident".to_string(), VariableKind::Node);
@@ -249,7 +249,7 @@ mod tests {
         parser.lexer.add_token("string".to_string());
         parser.lexer.add_token(" ".to_string());
 
-        let tokens = parser.lexer.lex_utf8(txt);
+        let tokens = parser.lexer.lex_utf8(txt).unwrap();
 
         let mut variables = HashMap::new();
         variables.insert("start".to_string(), VariableKind::Node);
@@ -360,7 +360,7 @@ mod tests {
         parser.lexer.add_token("\"".to_string());
 
         let lex_start = std::time::Instant::now();
-        let tokens = parser.lexer.lex_utf8(&txt);
+        let tokens = parser.lexer.lex_utf8(&txt).unwrap();
         println!("lex time: {:?}", lex_start.elapsed());
 
         let variables = HashMap::new();
@@ -438,7 +438,7 @@ mod tests {
 
         let txt = "let a: int = 500 * 9;";
 
-        let tokens = parser.lexer.lex_utf8(txt);
+        let tokens = parser.lexer.lex_utf8(txt).unwrap();
 
         println!("{:#?}", tokens);
 
