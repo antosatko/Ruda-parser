@@ -319,7 +319,10 @@ pub fn gen_parser() -> Parser {
                         OneOf {
                             token: MatchToken::Token(TokenKinds::Control(ControlTokenKind::Eof)),
                             rules: vec![],
-                            parameters: vec![Parameters::Goto("end".to_string()), Parameters::Debug(None)],
+                            parameters: vec![
+                                Parameters::Goto("end".to_string()),
+                                Parameters::Debug(None),
+                            ],
                         },
                     ],
                 }],
@@ -372,13 +375,21 @@ pub fn gen_parser() -> Parser {
     let function = Node {
         name: "KWFunction".to_string(),
         rules: vec![
-            Rule::Command { command: Commands::Print { message: "ahoj".to_string() } },
+            Rule::Command {
+                command: Commands::Print {
+                    message: "ahoj".to_string(),
+                },
+            },
             Rule::Is {
                 token: MatchToken::Word("fun".to_string()),
                 rules: vec![],
                 parameters: vec![Parameters::HardError(true), Parameters::Debug(None)],
             },
-            Rule::Command { command: Commands::Print { message: "ahoj".to_string() } },
+            Rule::Command {
+                command: Commands::Print {
+                    message: "ahoj".to_string(),
+                },
+            },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Text),
                 rules: vec![],
@@ -438,8 +449,12 @@ pub fn gen_parser() -> Parser {
                 rules: vec![],
                 parameters: vec![Parameters::HardError(true)],
             },
-            // will implement later
-            Rule::Until {
+            Rule::While {
+                token: MatchToken::Enumerator("block_line".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("nodes".to_string())],
+            },
+            Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token("}".to_string())),
                 rules: vec![],
                 parameters: vec![],
@@ -448,6 +463,15 @@ pub fn gen_parser() -> Parser {
         variables,
     };
     parser.grammar.nodes.insert(block.name.clone(), block);
+
+    let block_line = Enumerator {
+        name: "block_line".to_string(),
+        values: vec![MatchToken::Node("expression".to_string())],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(block_line.name.clone(), block_line);
 
     let mut variables = HashMap::new();
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
@@ -523,6 +547,174 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(path.name.clone(), path);
 
+    let mut variables = HashMap::new();
+    variables.insert("nodes".to_string(), grammar::VariableKind::NodeList);
+    let expression = Node {
+        name: "expression".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Node("value".to_string()),
+                rules: vec![],
+                parameters: vec![
+                    Parameters::Set("nodes".to_string()),
+                    Parameters::HardError(true),
+                ],
+            },
+            Rule::While {
+                token: MatchToken::Enumerator("operators".to_string()),
+                rules: vec![Rule::Is {
+                    token: MatchToken::Node("value".to_string()),
+                    rules: vec![],
+                    parameters: vec![Parameters::Set("nodes".to_string())],
+                }],
+                parameters: vec![Parameters::Set("nodes".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(expression.name.clone(), expression);
+
+    let mut variables = HashMap::new();
+    variables.insert("unaries".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("path".to_string(), grammar::VariableKind::Node);
+    variables.insert("tail".to_string(), grammar::VariableKind::Node);
+    let value = Node {
+        name: "value".to_string(),
+        rules: vec![
+            Rule::While {
+                token: MatchToken::Enumerator("unary_operators".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("unaries".to_string())],
+            },
+            Rule::IsOneOf {
+                tokens: vec![
+                    OneOf {
+                        token: MatchToken::Node("path".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("path".to_string()), Parameters::HardError(true)],
+                    },
+                    OneOf {
+                        token: MatchToken::Node("literals".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("path".to_string()), Parameters::HardError(true)],
+                    },
+                    ],
+                },
+            Rule::Maybe {
+                token: MatchToken::Enumerator("tail_options".to_string()),
+                is: vec![],
+                isnt: vec![],
+                parameters: vec![Parameters::Set("tail".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(value.name.clone(), value);
+
+    // tail options start
+    let tail_options = Enumerator {
+        name: "tail_options".to_string(),
+        values: vec![
+            MatchToken::Node("field".to_string()),
+            MatchToken::Node("index".to_string()),
+            MatchToken::Node("call".to_string()),
+        ],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(tail_options.name.clone(), tail_options);
+
+    let mut variables = HashMap::new();
+    variables.insert("field".to_string(), grammar::VariableKind::Node);
+    variables.insert("next".to_string(), grammar::VariableKind::Node);
+    let field = Node {
+        name: "field".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(".".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![Parameters::Set("field".to_string())],
+            },
+            Rule::Maybe {
+                token: MatchToken::Enumerator("tail_options".to_string()),
+                is: vec![],
+                isnt: vec![],
+                parameters: vec![Parameters::Set("next".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(field.name.clone(), field);
+
+    let mut variables = HashMap::new();
+    variables.insert("index".to_string(), grammar::VariableKind::Node);
+    let index = Node {
+        name: "index".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("[".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Node("expression".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("index".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("]".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(index.name.clone(), index);
+
+    let mut variables = HashMap::new();
+    variables.insert("arguments".to_string(), grammar::VariableKind::NodeList);
+    let call = Node {
+        name: "call".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("(".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Command { command: Commands::Print { message: "jsem v call zas a znova".to_string() } },
+            Rule::Maybe {
+                token: MatchToken::Node("expression".to_string()),
+                is: vec![Rule::While {
+                    token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                    rules: vec![Rule::Is {
+                        token: MatchToken::Node("expression".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("arguments".to_string())],
+                    }],
+                    parameters: vec![],
+                }],
+                isnt: vec![],
+                parameters: vec![Parameters::Set("arguments".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(")".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(call.name.clone(), call);
+
     parser
 }
 
@@ -534,15 +726,14 @@ mod tests {
     fn it_works() {
         let parser = gen_parser();
 
-        let test_string = 
-r##"import "#io" as io
+        let test_string = r##"import "#io" as io
 
 fun main() {
-    io.println("Hello, World!")
-}
-"##;
+    io.asddf()
+}"##;
 
         let tokens = parser.lexer.lex_utf8(test_string);
+        println!("{:?}", tokens.as_ref().unwrap());
         let ast = parser.parse(&tokens.unwrap(), test_string);
 
         panic!("{:#?}", ast.unwrap());

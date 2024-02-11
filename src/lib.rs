@@ -434,7 +434,7 @@ mod tests {
         let mut parser = String::new();
         file.read_to_string(&mut parser).unwrap();
 
-        let mut parser: Parser = serde_json::from_str(&parser).unwrap();
+        let parser: Parser = serde_json::from_str(&parser).unwrap();
 
         let txt = "let a: int = 500 * 9;";
 

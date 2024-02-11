@@ -153,7 +153,7 @@ impl Parser {
             if cursor.to_advance {
                 cursor.to_advance = false;
                 cursor.idx += 1;
-                if cursor.idx > tokens.len() {
+                if cursor.idx >= tokens.len() {
                     return Err(ParseError {
                         kind: ParseErrors::Eof,
                         location: tokens[cursor.idx - 1].location.clone(),
@@ -161,6 +161,12 @@ impl Parser {
                     });
                 }
             }
+            println!(
+                "tok: <{}> kind: {:?}",
+                lexer.stringify(&tokens[cursor.idx], text),
+                tokens[cursor.idx].kind
+            );
+            println!("rule: {:?}", rule);
             // stringifying the token
             match rule {
                 grammar::Rule::Is {
@@ -285,6 +291,7 @@ impl Parser {
                                     tokens,
                                     text,
                                 )?;
+                                cursor.to_advance = true;
                                 self.parse_rules(
                                     grammar,
                                     lexer,
@@ -297,7 +304,6 @@ impl Parser {
                                     text,
                                 )?
                                 .push(&mut msg_bus);
-                                cursor.to_advance = true;
                                 break;
                             }
                             IsNot(err) => match err.node {
@@ -367,7 +373,15 @@ impl Parser {
                             )?
                             .push(&mut msg_bus);
                         }
-                        IsNot(_) => {
+                        IsNot(err) => {
+                            match err.node {
+                                Some(ref node) => {
+                                    if node.harderror {
+                                        return Err(err);
+                                    }
+                                }
+                                None => (),
+                            }
                             self.parse_rules(
                                 grammar,
                                 lexer,
@@ -427,7 +441,14 @@ impl Parser {
                                 .push(&mut msg_bus);
                                 break;
                             }
-                            IsNot(_) => {}
+                            IsNot(err) => match err.node {
+                                Some(ref node) => {
+                                    if node.harderror {
+                                        return Err(err);
+                                    }
+                                }
+                                None => (),
+                            },
                         }
                     }
                     if !found {
@@ -450,7 +471,8 @@ impl Parser {
                     rules,
                     parameters,
                 } => {
-                    if let TokenCompare::Is(val) = self.match_token(
+                    println!("while, cursor: {:?}", cursor);
+                    match self.match_token(
                         grammar,
                         lexer,
                         token,
@@ -460,33 +482,43 @@ impl Parser {
                         tokens,
                         text,
                     )? {
-                        self.parse_parameters(
-                            grammar,
-                            lexer,
-                            parameters,
-                            cursor,
-                            globals,
-                            cursor_clone,
-                            node,
-                            val,
-                            &mut msg_bus,
-                            tokens,
-                            text,
-                        )?;
-                        cursor.to_advance = true;
-                        self.parse_rules(
-                            grammar,
-                            lexer,
-                            rules,
-                            cursor,
-                            globals,
-                            cursor_clone,
-                            node,
-                            tokens,
-                            text,
-                        )?
-                        .push(&mut msg_bus);
-                        advance = false;
+                        TokenCompare::Is(val) => {
+                            self.parse_parameters(
+                                grammar,
+                                lexer,
+                                parameters,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                                val,
+                                &mut msg_bus,
+                                tokens,
+                                text,
+                            )?;
+                            cursor.to_advance = true;
+                            self.parse_rules(
+                                grammar,
+                                lexer,
+                                rules,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                node,
+                                tokens,
+                                text,
+                            )?
+                            .push(&mut msg_bus);
+                            advance = false;
+                        }
+                        TokenCompare::IsNot(err) => match err.node {
+                            Some(ref node) => {
+                                if node.harderror {
+                                    return Err(err);
+                                }
+                            }
+                            None => (),
+                        },
                     }
                 }
                 grammar::Rule::Until {
@@ -505,10 +537,11 @@ impl Parser {
                         tokens,
                         text,
                     )? {
+                        // No need to handle the error here
                         cursor.idx += 1;
                         if cursor.idx >= tokens.len() {
                             return Err(ParseError {
-                                kind: ParseErrors::Eof,
+                                kind: ParseErrors::CouldNotFindToken(token.clone()),
                                 location: tokens[cursor.idx - 1].location.clone(),
                                 node: Some(node.clone()),
                             });
@@ -677,6 +710,85 @@ impl Parser {
                     .push(&mut msg_bus);
                     advance = false;
                 }
+                grammar::Rule::UntilOneOf {
+                    tokens: match_tokens,
+                } => {
+                    let mut found = false;
+                    while cursor.idx < tokens.len() {
+                        for OneOf {
+                            token,
+                            rules,
+                            parameters,
+                        } in match_tokens
+                        {
+                            use TokenCompare::*;
+                            match self.match_token(
+                                grammar,
+                                lexer,
+                                token,
+                                cursor,
+                                globals,
+                                cursor_clone,
+                                tokens,
+                                text,
+                            )? {
+                                Is(val) => {
+                                    found = true;
+                                    self.parse_parameters(
+                                        grammar,
+                                        lexer,
+                                        parameters,
+                                        cursor,
+                                        globals,
+                                        cursor_clone,
+                                        node,
+                                        val,
+                                        &mut msg_bus,
+                                        tokens,
+                                        text,
+                                    )?;
+                                    cursor.to_advance = true;
+                                    self.parse_rules(
+                                        grammar,
+                                        lexer,
+                                        rules,
+                                        cursor,
+                                        globals,
+                                        cursor_clone,
+                                        node,
+                                        tokens,
+                                        text,
+                                    )?
+                                    .push(&mut msg_bus);
+                                    break;
+                                }
+                                IsNot(err) => match err.node {
+                                    Some(ref node) => {
+                                        if node.harderror {
+                                            return Err(err);
+                                        }
+                                    }
+                                    None => (),
+                                },
+                            }
+                        }
+                        if found {
+                            break;
+                        }
+                        cursor.idx += 1;
+                    }
+                    if !found {
+                        err(
+                            ParseErrors::ExpectedOneOf(
+                                match_tokens.iter().map(|x| x.token.clone()).collect(),
+                            ),
+                            cursor,
+                            cursor_clone,
+                            &tokens[cursor.idx].location,
+                            Some(node.clone()),
+                        )?;
+                    }
+                }
             }
             if advance {
                 i += 1;
@@ -749,9 +861,16 @@ impl Parser {
                         })));
                     }
                 }
+                if cursor.idx >= tokens.len() {
+                    return Ok(TokenCompare::IsNot(ParseError {
+                        kind: ParseErrors::Eof,
+                        location: tokens[cursor.idx - 1].location.clone(),
+                        node: None,
+                    }));
+                }
                 let mut current_token = &tokens[cursor.idx];
                 while current_token.kind.is_whitespace() {
-                    cursor.to_advance = true;
+                    cursor.idx += 1;
                     current_token = &tokens[cursor.idx];
                 }
                 if *tok != current_token.kind {
@@ -778,7 +897,7 @@ impl Parser {
             grammar::MatchToken::Word(word) => {
                 let mut current_token = &tokens[cursor.idx];
                 while current_token.kind.is_whitespace() {
-                    cursor.to_advance = true;
+                    cursor.idx += 1;
                     current_token = &tokens[cursor.idx];
                 }
                 if let TokenKinds::Text = current_token.kind {
@@ -815,17 +934,12 @@ impl Parser {
                         });
                     }
                 };
-                let mut current_token = &tokens[cursor.idx];
-                while current_token.kind.is_whitespace() {
-                    cursor.to_advance = true;
-                    current_token = &tokens[cursor.idx];
-                }
                 let mut i = 0;
                 let token = loop {
                     if i >= enumerator.values.len() {
                         return Ok(TokenCompare::IsNot(ParseError {
                             kind: ParseErrors::EnumeratorNotFound(enumerator.name.clone()),
-                            location: current_token.location.clone(),
+                            location: tokens[cursor.idx].location.clone(),
                             node: None,
                         }));
                     }
@@ -848,7 +962,6 @@ impl Parser {
             }
             grammar::MatchToken::Any => {
                 let token = tokens[cursor.idx].clone();
-                cursor.to_advance = true;
                 return Ok(TokenCompare::Is(Nodes::Token(token)));
             }
         }
@@ -1289,7 +1402,11 @@ pub struct ParseError {
 
 impl std::fmt::Debug for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?} at {:?}", self.kind, self.location)
+        write!(f, "{:?} at {:?}", self.kind, self.location)?;
+        match &self.node {
+            Some(node) => write!(f, "\nError in node: {:?}", node.name),
+            None => Ok(()),
+        }
     }
 }
 
@@ -1328,6 +1445,8 @@ pub enum ParseErrors {
     CannotBreak(usize),
     /// Expected one of
     ExpectedOneOf(Vec<MatchToken>),
+    /// Could not find token
+    CouldNotFindToken(MatchToken),
 }
 
 impl std::fmt::Debug for ParseErrors {
@@ -1362,12 +1481,13 @@ impl std::fmt::Debug for ParseErrors {
                 }
                 write!(f, "Expected one of {}", result)
             }
+            ParseErrors::CouldNotFindToken(kind) => write!(f, "Could not find token {:?}", kind),
         }
     }
 }
 
 /// A cursor is used to keep track of the current position in the token stream and other useful information (no useful information yet)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Cursor {
     /// Current index in the token stream
     idx: usize,

@@ -111,6 +111,10 @@ pub enum Rule {
         rules: Rules,
         parameters: Vec<Parameters>,
     },
+    /// Searches in the tokens until one of the tokens is matched
+    UntilOneOf {
+        tokens: Vec<OneOf>,
+    },
     /// Performs a command
     ///
     /// The command will be executed without matching a token

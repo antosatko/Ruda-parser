@@ -139,26 +139,29 @@ impl Lexer {
             }
 
             // Match token kinds
-            for token_kind in &self.token_kinds {
-                let tok_len = token_kind.len();
-                if i + tok_len >= len {
+            'tokens: for token_kind in &self.token_kinds {
+                let tok_chars = token_kind.char_indices();
+                let tok_len = tok_chars.count();
+                if i + tok_len > len {
                     // All the remaining tokens are longer than the remaining text
                     //
                     // This is a performance optimization
                     break;
                 }
-                let token = &text[chars[i].0..chars[i + tok_len].0];
-                if token == *token_kind {
-                    tokens.push(Token {
-                        index: chars[i].0,
-                        len: tok_len,
-                        location: TextLocation::new(line, column),
-                        kind: TokenKinds::Token(token_kind.clone()),
-                    });
-                    i += tok_len;
-                    column += tok_len;
-                    continue 'chars;
+                for (j, (_, c)) in token_kind.char_indices().enumerate() {
+                    if c != chars[i + j].1 {
+                        continue 'tokens;
+                    }
                 }
+                tokens.push(Token {
+                    index: chars[i].0,
+                    len: token_kind.len(),
+                    location: TextLocation::new(line, column),
+                    kind: TokenKinds::Token(token_kind.clone()),
+                });
+                i += tok_len;
+                column += tok_len;
+                continue 'chars;
             }
 
             // Match whitespace
@@ -219,7 +222,7 @@ impl Lexer {
     }
 
     /// Lexer for ascii-only text
-    pub fn lex_ascii(&mut self, text: &str) -> Result<Vec<Token>, PreprocessorError> {
+    pub fn lex_ascii(&self, text: &str) -> Result<Vec<Token>, PreprocessorError> {
         let chars = text.as_bytes();
         // the allocation is a guess, but it should be close enough
         let mut tokens = Vec::with_capacity(chars.len() / 4);
@@ -342,6 +345,9 @@ impl Lexer {
     }
 
     pub fn stringify<'a>(&self, token: &Token, text: &'a str) -> &'a str {
+        if token.kind == TokenKinds::Control(ControlTokenKind::Eof) {
+            return "__EOF__";
+        }
         &text[token.index..token.index + token.len]
     }
 }
