@@ -44,7 +44,7 @@ impl std::fmt::Debug for PreprocessorError {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Lexer {
     /// Possible token kinds
-    token_kinds: Vec<String>,
+    pub(crate) token_kinds: Vec<String>,
     longest_token_size: usize,
     #[serde(skip, default)]
     pub preprocessors: Vec<Preprocessor>,

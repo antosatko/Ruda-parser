@@ -60,9 +60,7 @@ pub enum Rule {
     /// If one of the tokens is matched, the rules will be executed
     ///
     /// If none of the tokens is matched, the node will end with an error
-    IsOneOf {
-        tokens: Vec<OneOf>,
-    },
+    IsOneOf { tokens: Vec<OneOf> },
     /// Matches a token
     ///
     /// If the token is matched, the rules will be executed
@@ -112,9 +110,7 @@ pub enum Rule {
         parameters: Vec<Parameters>,
     },
     /// Searches in the tokens until one of the tokens is matched
-    UntilOneOf {
-        tokens: Vec<OneOf>,
-    },
+    UntilOneOf { tokens: Vec<OneOf> },
     /// Performs a command
     ///
     /// The command will be executed without matching a token
@@ -231,7 +227,7 @@ pub enum Parameters {
     /// Subtracts 1 from a variable of type Count
     Decrement(String),
     /// Adds 1 to a global variable of type Count
-    CountGlobal(String),
+    IncrementGlobal(String),
     /// Sets a variable to true
     True(String),
     /// Sets a variable to false
@@ -273,4 +269,586 @@ pub enum Parameters {
 pub struct Enumerator {
     pub name: String,
     pub values: Vec<MatchToken>,
+}
+
+/// validation module for grammar that is otherwise dynamically typed
+///
+/// This module is used to validate the grammar and make sure that it is correct
+///
+/// The grammar is validated by checking if the rules are correct and if the variables are used correctly
+///
+/// > note: Grammar errors have caused me a lot of headache in the past so using this module is highly recommended
+pub mod validator {
+    use super::*;
+    use crate::lexer::{self, *};
+
+    impl Grammar {
+        /// Validates the grammar
+        pub fn validate(&self, lexer: &Lexer) -> ValidationResult {
+            let mut result = ValidationResult::new();
+
+            for node in self.nodes.values() {
+                self.validate_node(node, lexer, &mut result);
+            }
+
+            result
+        }
+
+        pub fn validate_node(&self, node: &Node, lexer: &Lexer, result: &mut ValidationResult) {
+            for rule in &node.rules {
+                self.validate_rule(rule, node, lexer, result);
+            }
+        }
+
+        pub fn validate_rule(
+            &self,
+            rule: &Rule,
+            node: &Node,
+            lexer: &Lexer,
+            result: &mut ValidationResult,
+        ) {
+            match rule {
+                Rule::Is {
+                    token,
+                    rules,
+                    parameters,
+                } => {
+                    self.validate_token(token, node, lexer, result);
+                    self.validate_parameters(parameters, node, result);
+                    for rule in rules {
+                        self.validate_rule(rule, node, lexer, result);
+                    }
+                }
+                Rule::Isnt {
+                    token,
+                    rules,
+                    parameters,
+                } => {
+                    self.validate_token(token, node, lexer, result);
+                    self.validate_parameters(parameters, node, result);
+                    for rule in rules {
+                        self.validate_rule(rule, node, lexer, result);
+                    }
+                }
+                Rule::IsOneOf { tokens } => {
+                    for one_of in tokens {
+                        self.validate_token(&one_of.token, node, lexer, result);
+                        self.validate_parameters(&one_of.parameters, node, result);
+                        for rule in &one_of.rules {
+                            self.validate_rule(rule, node, lexer, result);
+                        }
+                    }
+                }
+                Rule::Maybe {
+                    token,
+                    is,
+                    isnt,
+                    parameters,
+                } => {
+                    self.validate_token(token, node, lexer, result);
+                    self.validate_parameters(parameters, node, result);
+                    for rule in is {
+                        self.validate_rule(rule, node, lexer, result);
+                    }
+                    for rule in isnt {
+                        self.validate_rule(rule, node, lexer, result);
+                    }
+                }
+                Rule::MaybeOneOf { is_one_of, isnt } => {
+                    for (token, rules, parameters) in is_one_of {
+                        self.validate_token(token, node, lexer, result);
+                        self.validate_parameters(parameters, node, result);
+                        for rule in rules {
+                            self.validate_rule(rule, node, lexer, result);
+                        }
+                    }
+                    for rule in isnt {
+                        self.validate_rule(rule, node, lexer, result);
+                    }
+                }
+                Rule::While {
+                    token,
+                    rules,
+                    parameters,
+                } => {
+                    self.validate_token(token, node, lexer, result);
+                    self.validate_parameters(parameters, node, result);
+                    for rule in rules {
+                        self.validate_rule(rule, node, lexer, result);
+                    }
+                }
+                Rule::Loop { rules } => {
+                    for rule in rules {
+                        self.validate_rule(rule, node, lexer, result);
+                    }
+                }
+                Rule::Until {
+                    token,
+                    rules,
+                    parameters,
+                } => {
+                    self.validate_token(token, node, lexer, result);
+                    self.validate_parameters(parameters, node, result);
+                    for rule in rules {
+                        self.validate_rule(rule, node, lexer, result);
+                    }
+                }
+                Rule::UntilOneOf { tokens } => {
+                    for one_of in tokens {
+                        self.validate_token(&one_of.token, node, lexer, result);
+                        self.validate_parameters(&one_of.parameters, node, result);
+                        for rule in &one_of.rules {
+                            self.validate_rule(rule, node, lexer, result);
+                        }
+                    }
+                }
+                Rule::Command { command } => match command {
+                    Commands::Compare {
+                        left,
+                        right,
+                        comparison,
+                        rules,
+                    } => {
+                        match self.globals.get(left) {
+                            Some(var) => match var {
+                                VariableKind::Number => (),
+                                _ => result.errors.push(ValidationError {
+                                    kind: ValidationErrors::CantUseVariable(left.clone()),
+                                    node_name: node.name.clone(),
+                                }),
+                            },
+                            None => {
+                                result.errors.push(ValidationError {
+                                    kind: ValidationErrors::GlobalNotFound(left.clone()),
+                                    node_name: node.name.clone(),
+                                });
+                            }
+                        }
+                        match self.globals.get(right) {
+                            Some(var) => match var {
+                                VariableKind::Number => (),
+                                _ => result.errors.push(ValidationError {
+                                    kind: ValidationErrors::CantUseVariable(right.clone()),
+                                    node_name: node.name.clone(),
+                                }),
+                            },
+                            None => {
+                                result.errors.push(ValidationError {
+                                    kind: ValidationErrors::GlobalNotFound(right.clone()),
+                                    node_name: node.name.clone(),
+                                });
+                            }
+                        }
+                        for rule in rules {
+                            self.validate_rule(rule, node, lexer, result);
+                        }
+                    }
+                    Commands::Error { message } => (),
+                    Commands::HardError { set } => (),
+                    Commands::Goto { label } => (),
+                    Commands::Label { name } => (),
+                    Commands::Print { message } => (),
+                },
+            }
+        }
+
+        pub fn validate_token(
+            &self,
+            token: &MatchToken,
+            node: &Node,
+            lexer: &Lexer,
+            result: &mut ValidationResult,
+        ) {
+            match token {
+                MatchToken::Node(name) => {
+                    if !self.nodes.contains_key(name) {
+                        result.errors.push(ValidationError {
+                            kind: ValidationErrors::NodeNotFound(name.clone()),
+                            node_name: node.name.clone(),
+                        });
+                    }
+                }
+                MatchToken::Enumerator(enumerator) => {
+                    if !self.enumerators.contains_key(enumerator) {
+                        result.errors.push(ValidationError {
+                            kind: ValidationErrors::EnumeratorNotFound(enumerator.clone()),
+                            node_name: node.name.clone(),
+                        });
+                    }
+                }
+                MatchToken::Any => result.warnings.push(ValidationWarning {
+                    kind: ValidationWarnings::UsedDepricated(Depricated::Any),
+                    node_name: node.name.clone(),
+                }),
+                MatchToken::Token(kind) => match kind {
+                    TokenKinds::Token(txt) => {
+                        if txt.is_empty() {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::EmptyToken,
+                                node_name: node.name.clone(),
+                            });
+                            return;
+                        }
+                        // check if token is in the lexer
+                        if !lexer.token_kinds.iter().any(|k| k == txt) {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::TokenNotFound(txt.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+
+                        // check if it starts with a number
+                        let first = txt.chars().next().unwrap();
+                        if first.is_numeric() {
+                            result.warnings.push(ValidationWarning {
+                                kind: ValidationWarnings::UnusualToken(txt.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+
+                        // check if it contains a whitespace
+                        if txt.chars().any(|c| c.is_whitespace()) {
+                            result.warnings.push(ValidationWarning {
+                                kind: ValidationWarnings::UnusualToken(txt.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+
+                        // check if it is longer than 2 characters
+                        if txt.len() > 2 {
+                            result.warnings.push(ValidationWarning {
+                                kind: ValidationWarnings::UnusualToken(txt.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+
+                        // check if it is not ascii
+                        if !txt.chars().all(|c| c.is_ascii()) {
+                            result.warnings.push(ValidationWarning {
+                                kind: ValidationWarnings::UnusualToken(txt.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        pub fn validate_parameters(
+            &self,
+            parameters: &Vec<Parameters>,
+            node: &Node,
+            result: &mut ValidationResult,
+        ) {
+            for parameter in parameters {
+                match parameter {
+                    Parameters::Set(name) => match node.variables.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Node => (),
+                            VariableKind::NodeList => (),
+                            VariableKind::Boolean => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Number => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::VariableNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::Global(name) => match self.globals.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Node => (),
+                            VariableKind::NodeList => (),
+                            VariableKind::Boolean => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Number => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::GlobalNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::Increment(name) => match node.variables.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Number => (),
+                            VariableKind::Node => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::NodeList => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Boolean => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::VariableNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::Decrement(name) => match node.variables.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Number => (),
+                            VariableKind::Node => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::NodeList => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Boolean => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::VariableNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::IncrementGlobal(name) => match self.globals.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Number => (),
+                            VariableKind::Node => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::NodeList => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Boolean => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::GlobalNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::True(name) => match node.variables.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Boolean => (),
+                            VariableKind::Node => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::NodeList => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Number => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::VariableNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::False(name) => match node.variables.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Boolean => (),
+                            VariableKind::Node => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::NodeList => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Number => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::VariableNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::TrueGlobal(name) => match self.globals.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Boolean => (),
+                            VariableKind::Node => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::NodeList => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Number => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::GlobalNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::FalseGlobal(name) => match self.globals.get(name) {
+                        Some(var) => match var {
+                            VariableKind::Boolean => (),
+                            VariableKind::Node => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::NodeList => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                            VariableKind::Number => result.errors.push(ValidationError {
+                                kind: ValidationErrors::CantUseVariable(name.clone()),
+                                node_name: node.name.clone(),
+                            }),
+                        },
+                        None => {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::GlobalNotFound(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                    },
+                    Parameters::Print(_) => {
+                        result.warnings.push(ValidationWarning {
+                            kind: ValidationWarnings::UsedPrint,
+                            node_name: node.name.clone(),
+                        });
+                    }
+                    Parameters::Debug(node_option) => {
+                        match node_option {
+                            Some(name) => match node.variables.get(name) {
+                                Some(_) => (),
+                                None => {
+                                    result.errors.push(ValidationError {
+                                        kind: ValidationErrors::VariableNotFound(name.clone()),
+                                        node_name: node.name.clone(),
+                                    });
+                                }
+                            },
+                            None => (),
+                        }
+                        result.warnings.push(ValidationWarning {
+                            kind: ValidationWarnings::UsedDebug,
+                            node_name: node.name.clone(),
+                        });
+                    }
+                    Parameters::Back(_) => {
+                        result.warnings.push(ValidationWarning {
+                            kind: ValidationWarnings::UsedDepricated(Depricated::Back),
+                            node_name: node.name.clone(),
+                        });
+                    }
+                    Parameters::Return => (),
+                    Parameters::Break(_) => (),
+                    Parameters::HardError(_) => (),
+                    Parameters::Goto(label) => {
+                        // check if label exists anywhere in the node (this is tedious so maybe next time)
+                    }
+                    Parameters::NodeStart => (),
+                    Parameters::NodeEnd => (),
+                }
+            }
+        }
+    }
+
+    pub struct ValidationResult {
+        pub errors: Vec<ValidationError>,
+        pub warnings: Vec<ValidationWarning>,
+    }
+
+    impl ValidationResult {
+        pub fn new() -> Self {
+            Self {
+                errors: Vec::new(),
+                warnings: Vec::new(),
+            }
+        }
+
+        pub fn success(&self) -> bool {
+            self.errors.is_empty() && self.warnings.is_empty()
+        }
+
+        pub fn pass(&self) -> bool {
+            self.errors.is_empty()
+        }
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub struct ValidationError {
+        pub kind: ValidationErrors,
+        pub node_name: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub enum ValidationErrors {
+        NodeNotFound(String),
+        EnumeratorNotFound(String),
+        VariableNotFound(String),
+        GlobalNotFound(String),
+        CantUseVariable(String),
+        EmptyToken,
+        TokenNotFound(String),
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub struct ValidationWarning {
+        pub kind: ValidationWarnings,
+        pub node_name: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub enum ValidationWarnings {
+        UnusedVariable(String),
+        UsedDebug,
+        UsedPrint,
+        UsedDepricated(Depricated),
+        UnusualToken(String),
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub enum Depricated {
+        /// The node is depricated
+        ///
+        /// It is advised to use Goto instead
+        Back,
+        /// Maybe you should use a different approach
+        Any,
+    }
 }

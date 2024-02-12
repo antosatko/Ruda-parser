@@ -31,6 +31,7 @@ pub fn gen_parser() -> Parser {
         "!=".to_string(),
         "!".to_string(),
         "&&".to_string(),
+        "&".to_string(),
         "||".to_string(),
         "?".to_string(),
         ":".to_string(),
@@ -375,20 +376,10 @@ pub fn gen_parser() -> Parser {
     let function = Node {
         name: "KWFunction".to_string(),
         rules: vec![
-            Rule::Command {
-                command: Commands::Print {
-                    message: "ahoj".to_string(),
-                },
-            },
             Rule::Is {
                 token: MatchToken::Word("fun".to_string()),
                 rules: vec![],
                 parameters: vec![Parameters::HardError(true), Parameters::Debug(None)],
-            },
-            Rule::Command {
-                command: Commands::Print {
-                    message: "ahoj".to_string(),
-                },
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Text),
@@ -524,21 +515,21 @@ pub fn gen_parser() -> Parser {
     parser.grammar.nodes.insert(type_.name.clone(), type_);
 
     let mut variables = HashMap::new();
-    variables.insert("nodes".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("path".to_string(), grammar::VariableKind::NodeList);
     let path = Node {
         name: "path".to_string(),
         rules: vec![
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Text),
                 rules: vec![],
-                parameters: vec![Parameters::Set("nodes".to_string())],
+                parameters: vec![Parameters::Set("path".to_string()), Parameters::HardError(true)],
             },
             Rule::While {
                 token: MatchToken::Token(TokenKinds::Token(".".to_string())),
                 rules: vec![Rule::Is {
                     token: MatchToken::Token(TokenKinds::Text),
                     rules: vec![],
-                    parameters: vec![Parameters::Set("nodes".to_string())],
+                    parameters: vec![Parameters::Set("path".to_string())],
                 }],
                 parameters: vec![],
             },
@@ -594,15 +585,21 @@ pub fn gen_parser() -> Parser {
                     OneOf {
                         token: MatchToken::Node("path".to_string()),
                         rules: vec![],
-                        parameters: vec![Parameters::Set("path".to_string()), Parameters::HardError(true)],
+                        parameters: vec![
+                            Parameters::Set("path".to_string()),
+                            Parameters::HardError(true),
+                        ],
                     },
                     OneOf {
-                        token: MatchToken::Node("literals".to_string()),
+                        token: MatchToken::Enumerator("literals".to_string()),
                         rules: vec![],
-                        parameters: vec![Parameters::Set("path".to_string()), Parameters::HardError(true)],
+                        parameters: vec![
+                            Parameters::Set("path".to_string()),
+                            Parameters::HardError(true),
+                        ],
                     },
-                    ],
-                },
+                ],
+            },
             Rule::Maybe {
                 token: MatchToken::Enumerator("tail_options".to_string()),
                 is: vec![],
@@ -690,7 +687,11 @@ pub fn gen_parser() -> Parser {
                 rules: vec![],
                 parameters: vec![Parameters::HardError(true)],
             },
-            Rule::Command { command: Commands::Print { message: "jsem v call zas a znova".to_string() } },
+            Rule::Command {
+                command: Commands::Print {
+                    message: "jsem v call zas a znova".to_string(),
+                },
+            },
             Rule::Maybe {
                 token: MatchToken::Node("expression".to_string()),
                 is: vec![Rule::While {
@@ -720,16 +721,32 @@ pub fn gen_parser() -> Parser {
 
 #[cfg(test)]
 mod tests {
+    use rparse::grammar::validator::ValidationError;
+
     use super::*;
 
     #[test]
     fn it_works() {
         let parser = gen_parser();
 
+        use grammar::validator;
+
+        let validation = parser.grammar.validate(&parser.lexer);
+
+        for error in validation.errors.iter() {
+            println!("{:?}", error);
+        }
+
+        for warning in validation.warnings.iter() {
+            println!("{:?}", warning);
+        }
+
+        assert!(validation.pass(), "Grammar is not valid");
+
         let test_string = r##"import "#io" as io
 
 fun main() {
-    io.asddf()
+    io.println("danda")
 }"##;
 
         let tokens = parser.lexer.lex_utf8(test_string);

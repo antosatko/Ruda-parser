@@ -59,6 +59,7 @@ impl Parser {
         tokens: &Vec<Token>,
         text: &str,
     ) -> Result<Node, (ParseError, Node)> {
+        println!("-- start: {}, cursor: {:?}", name, cursor);
         let mut node = match Node::from_grammar(grammar, name) {
             Ok(node) => node,
             Err(err) => return Err((err, Node::new(name.to_string()))),
@@ -90,6 +91,8 @@ impl Parser {
             tokens,
             text,
         );
+
+        println!("-- end: {}, cursor: {:?}", name, cursor);
 
         // If the node has not set the last_string_idx, we set it to the end of the last token
         if node.last_string_idx == 0 {
@@ -266,6 +269,7 @@ impl Parser {
                     } in pos_tokens
                     {
                         use TokenCompare::*;
+                        println!("trying option: {:?}", token);
                         match self.match_token(
                             grammar,
                             lexer,
@@ -277,6 +281,7 @@ impl Parser {
                             text,
                         )? {
                             Is(val) => {
+                                println!("success");
                                 found = true;
                                 self.parse_parameters(
                                     grammar,
@@ -309,10 +314,11 @@ impl Parser {
                             IsNot(err) => match err.node {
                                 Some(ref node) => {
                                     if node.harderror {
+                                        println!("non recoverable error: {:?}", err);
                                         return Err(err);
                                     }
                                 }
-                                None => (),
+                                None => println!("recoverable error: {:?}", err),
                             },
                         }
                     }
@@ -471,7 +477,6 @@ impl Parser {
                     rules,
                     parameters,
                 } => {
-                    println!("while, cursor: {:?}", cursor);
                     match self.match_token(
                         grammar,
                         lexer,
@@ -517,7 +522,7 @@ impl Parser {
                                     return Err(err);
                                 }
                             }
-                            None => (),
+                            None => ()
                         },
                     }
                 }
@@ -935,6 +940,7 @@ impl Parser {
                     }
                 };
                 let mut i = 0;
+                let cursor_clone_local = cursor.clone();
                 let token = loop {
                     if i >= enumerator.values.len() {
                         return Ok(TokenCompare::IsNot(ParseError {
@@ -944,7 +950,7 @@ impl Parser {
                         }));
                     }
                     let token = &enumerator.values[i];
-                    if let TokenCompare::Is(val) = self.match_token(
+                    match self.match_token(
                         grammar,
                         lexer,
                         token,
@@ -954,9 +960,17 @@ impl Parser {
                         tokens,
                         text,
                     )? {
-                        break val;
+                        TokenCompare::Is(val) => break val,
+                        TokenCompare::IsNot(err) => {
+                            *cursor = cursor_clone_local.clone();
+                            if let Some(node) = &err.node {
+                                if node.harderror {
+                                    return Err(err);
+                                }
+                            }
+                            i += 1;
+                        }
                     }
-                    i += 1;
                 };
                 return Ok(TokenCompare::Is(token));
             }
@@ -1184,7 +1198,7 @@ impl Parser {
                         })?,
                     };
                 }
-                grammar::Parameters::CountGlobal(variable) => {
+                grammar::Parameters::IncrementGlobal(variable) => {
                     let kind = match globals.get_mut(variable) {
                         Some(kind) => kind,
                         None => {
@@ -1531,3 +1545,4 @@ impl Msg {
         bus.send(self);
     }
 }
+
