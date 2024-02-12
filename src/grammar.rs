@@ -295,9 +295,11 @@ pub mod validator {
         }
 
         pub fn validate_node(&self, node: &Node, lexer: &Lexer, result: &mut ValidationResult) {
+            let mut laf = LostAndFound::new();
             for rule in &node.rules {
-                self.validate_rule(rule, node, lexer, result);
+                self.validate_rule(rule, node, lexer, &mut laf, result);
             }
+            laf.pass(result, &node.name);
         }
 
         pub fn validate_rule(
@@ -305,6 +307,7 @@ pub mod validator {
             rule: &Rule,
             node: &Node,
             lexer: &Lexer,
+            laf: &mut LostAndFound,
             result: &mut ValidationResult,
         ) {
             match rule {
@@ -313,10 +316,10 @@ pub mod validator {
                     rules,
                     parameters,
                 } => {
-                    self.validate_token(token, node, lexer, result);
-                    self.validate_parameters(parameters, node, result);
+                    self.validate_token(token, node, lexer, laf, result);
+                    self.validate_parameters(parameters, node, laf, result);
                     for rule in rules {
-                        self.validate_rule(rule, node, lexer, result);
+                        self.validate_rule(rule, node, lexer, laf, result);
                     }
                 }
                 Rule::Isnt {
@@ -324,18 +327,18 @@ pub mod validator {
                     rules,
                     parameters,
                 } => {
-                    self.validate_token(token, node, lexer, result);
-                    self.validate_parameters(parameters, node, result);
+                    self.validate_token(token, node, lexer, laf, result);
+                    self.validate_parameters(parameters, node, laf, result);
                     for rule in rules {
-                        self.validate_rule(rule, node, lexer, result);
+                        self.validate_rule(rule, node, lexer, laf, result);
                     }
                 }
                 Rule::IsOneOf { tokens } => {
                     for one_of in tokens {
-                        self.validate_token(&one_of.token, node, lexer, result);
-                        self.validate_parameters(&one_of.parameters, node, result);
+                        self.validate_token(&one_of.token, node, lexer, laf, result);
+                        self.validate_parameters(&one_of.parameters, node, laf, result);
                         for rule in &one_of.rules {
-                            self.validate_rule(rule, node, lexer, result);
+                            self.validate_rule(rule, node, lexer, laf, result);
                         }
                     }
                 }
@@ -345,25 +348,25 @@ pub mod validator {
                     isnt,
                     parameters,
                 } => {
-                    self.validate_token(token, node, lexer, result);
-                    self.validate_parameters(parameters, node, result);
+                    self.validate_token(token, node, lexer, laf, result);
+                    self.validate_parameters(parameters, node, laf, result);
                     for rule in is {
-                        self.validate_rule(rule, node, lexer, result);
+                        self.validate_rule(rule, node, lexer, laf, result);
                     }
                     for rule in isnt {
-                        self.validate_rule(rule, node, lexer, result);
+                        self.validate_rule(rule, node, lexer, laf, result);
                     }
                 }
                 Rule::MaybeOneOf { is_one_of, isnt } => {
                     for (token, rules, parameters) in is_one_of {
-                        self.validate_token(token, node, lexer, result);
-                        self.validate_parameters(parameters, node, result);
+                        self.validate_token(token, node, lexer, laf, result);
+                        self.validate_parameters(parameters, node, laf, result);
                         for rule in rules {
-                            self.validate_rule(rule, node, lexer, result);
+                            self.validate_rule(rule, node, lexer, laf, result);
                         }
                     }
                     for rule in isnt {
-                        self.validate_rule(rule, node, lexer, result);
+                        self.validate_rule(rule, node, lexer, laf, result);
                     }
                 }
                 Rule::While {
@@ -371,15 +374,15 @@ pub mod validator {
                     rules,
                     parameters,
                 } => {
-                    self.validate_token(token, node, lexer, result);
-                    self.validate_parameters(parameters, node, result);
+                    self.validate_token(token, node, lexer, laf, result);
+                    self.validate_parameters(parameters, node, laf, result);
                     for rule in rules {
-                        self.validate_rule(rule, node, lexer, result);
+                        self.validate_rule(rule, node, lexer, laf, result);
                     }
                 }
                 Rule::Loop { rules } => {
                     for rule in rules {
-                        self.validate_rule(rule, node, lexer, result);
+                        self.validate_rule(rule, node, lexer, laf, result);
                     }
                 }
                 Rule::Until {
@@ -387,18 +390,18 @@ pub mod validator {
                     rules,
                     parameters,
                 } => {
-                    self.validate_token(token, node, lexer, result);
-                    self.validate_parameters(parameters, node, result);
+                    self.validate_token(token, node, lexer, laf, result);
+                    self.validate_parameters(parameters, node, laf, result);
                     for rule in rules {
-                        self.validate_rule(rule, node, lexer, result);
+                        self.validate_rule(rule, node, lexer, laf, result);
                     }
                 }
                 Rule::UntilOneOf { tokens } => {
                     for one_of in tokens {
-                        self.validate_token(&one_of.token, node, lexer, result);
-                        self.validate_parameters(&one_of.parameters, node, result);
+                        self.validate_token(&one_of.token, node, lexer, laf, result);
+                        self.validate_parameters(&one_of.parameters, node, laf, result);
                         for rule in &one_of.rules {
-                            self.validate_rule(rule, node, lexer, result);
+                            self.validate_rule(rule, node, lexer, laf, result);
                         }
                     }
                 }
@@ -440,13 +443,23 @@ pub mod validator {
                             }
                         }
                         for rule in rules {
-                            self.validate_rule(rule, node, lexer, result);
+                            self.validate_rule(rule, node, lexer, laf, result);
                         }
                     }
                     Commands::Error { message } => (),
                     Commands::HardError { set } => (),
-                    Commands::Goto { label } => (),
-                    Commands::Label { name } => (),
+                    Commands::Goto { label } => {
+                        laf.lost_labels.push(label.clone());
+                    }
+                    Commands::Label { name } => {
+                        if laf.found_labels.contains(&name) {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::DuplicateLabel(name.clone()),
+                                node_name: node.name.clone(),
+                            });
+                        }
+                        laf.found_labels.push(name.clone());
+                    }
                     Commands::Print { message } => (),
                 },
             }
@@ -457,6 +470,7 @@ pub mod validator {
             token: &MatchToken,
             node: &Node,
             lexer: &Lexer,
+            laf: &mut LostAndFound,
             result: &mut ValidationResult,
         ) {
             match token {
@@ -540,6 +554,7 @@ pub mod validator {
             &self,
             parameters: &Vec<Parameters>,
             node: &Node,
+            laf: &mut LostAndFound,
             result: &mut ValidationResult,
         ) {
             for parameter in parameters {
@@ -779,7 +794,7 @@ pub mod validator {
                     Parameters::Break(_) => (),
                     Parameters::HardError(_) => (),
                     Parameters::Goto(label) => {
-                        // check if label exists anywhere in the node (this is tedious so maybe next time)
+                        laf.lost_labels.push(label.clone());
                     }
                     Parameters::NodeStart => (),
                     Parameters::NodeEnd => (),
@@ -825,6 +840,8 @@ pub mod validator {
         CantUseVariable(String),
         EmptyToken,
         TokenNotFound(String),
+        DuplicateLabel(String),
+        LabelNotFound(String),
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -840,6 +857,7 @@ pub mod validator {
         UsedPrint,
         UsedDepricated(Depricated),
         UnusualToken(String),
+        UnusedLabel(String),
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -850,5 +868,39 @@ pub mod validator {
         Back,
         /// Maybe you should use a different approach
         Any,
+    }
+
+    /// This is a structure that keeps track of things that are hard to find
+    pub struct LostAndFound {
+        pub lost_labels: Vec<String>,
+        pub found_labels: Vec<String>,
+    }
+
+    impl LostAndFound {
+        pub fn new() -> Self {
+            Self {
+                lost_labels: Vec::new(),
+                found_labels: Vec::new(),
+            }
+        }
+
+        pub fn pass(&self, result: &mut ValidationResult, node_name: &str) {
+            for looking_for in &self.lost_labels {
+                if !self.found_labels.contains(looking_for) {
+                    result.errors.push(ValidationError {
+                        kind: ValidationErrors::LabelNotFound(looking_for.clone()),
+                        node_name: node_name.to_string(),
+                    });
+                }
+            }
+            for found in &self.found_labels {
+                if !self.lost_labels.contains(found) {
+                    result.warnings.push(ValidationWarning {
+                        kind: ValidationWarnings::UnusedLabel(found.clone()),
+                        node_name: node_name.to_string(),
+                    });
+                }
+            }
+        }
     }
 }
