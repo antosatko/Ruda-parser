@@ -36,12 +36,10 @@ impl Parser {
 mod tests {
     use std::{collections::HashMap, io::Write, vec};
 
-    use serde::{Deserialize, Serialize};
-    use serde_json::Deserializer;
 
     use crate::lexer::TokenKinds;
 
-    use self::grammar::{Grammar, Parameters, VariableKind};
+    use self::grammar::{Parameters, VariableKind};
 
     use super::*;
 

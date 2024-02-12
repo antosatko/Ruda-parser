@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
-use rparse::parser::VariableKind;
-use rparse::{api::*, grammar};
+use rparse::grammar;
 use rparse::{grammar::*, lexer::*, Parser};
 
 pub fn gen_parser() -> Parser {
     let mut parser = Parser::new();
 
     let tokens = vec![
+        "8 šunka".to_string(),
+        "8 šunka".to_string(),
         "+=".to_string(),
         "-=".to_string(),
         "*=".to_string(),
@@ -721,15 +722,11 @@ pub fn gen_parser() -> Parser {
 
 #[cfg(test)]
 mod tests {
-    use rparse::grammar::validator::ValidationError;
-
     use super::*;
 
     #[test]
     fn it_works() {
         let parser = gen_parser();
-
-        use grammar::validator;
 
         let validation = parser.grammar.validate(&parser.lexer);
 
@@ -741,7 +738,7 @@ mod tests {
             println!("{:?}", warning);
         }
 
-        assert!(validation.pass(), "Grammar is not valid");
+        assert!(validation.pass(), "Grammar is not valid"); // change .pass() to .success() for production
 
         let test_string = r##"import "#io" as io
 

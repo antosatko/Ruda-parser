@@ -280,12 +280,81 @@ pub struct Enumerator {
 /// > note: Grammar errors have caused me a lot of headache in the past so using this module is highly recommended
 pub mod validator {
     use super::*;
-    use crate::lexer::{self, *};
+    use crate::lexer::*;
+
+    impl Lexer {
+        pub fn validate_tokens(&self, result: &mut ValidationResult) {
+            let mut tokens = Vec::new();
+            for token in &self.token_kinds {
+                // tokens that have already been validated can be ignored
+                if tokens.contains(token) {
+                    continue;
+                }
+                tokens.push(token.clone());
+                // check for collisions
+                if self.token_kinds.iter().filter(|t| *t == token).count() > 1 {
+                    result.errors.push(ValidationError {
+                        kind: ValidationErrors::TokenCollision(token.clone()),
+                        node_name: "__lexer__".to_string(),
+                    });
+                }
+                // check if token is empty
+                if token.is_empty() {
+                    result.errors.push(ValidationError {
+                        kind: ValidationErrors::EmptyToken,
+                        node_name: "__lexer__".to_string(),
+                    });
+                }
+                // check if it starts with a number
+                let first = token.chars().next().unwrap();
+                if first.is_numeric() {
+                    result.warnings.push(ValidationWarning {
+                        kind: ValidationWarnings::UnusualToken(
+                            token.clone(),
+                            TokenErrors::StartsNumeric,
+                        ),
+                        node_name: "__lexer__".to_string(),
+                    });
+                }
+
+                // check if it contains a whitespace
+                if token.chars().any(|c| c.is_whitespace()) {
+                    result.warnings.push(ValidationWarning {
+                        kind: ValidationWarnings::UnusualToken(
+                            token.clone(),
+                            TokenErrors::ContainsWhitespace,
+                        ),
+                        node_name: "__lexer__".to_string(),
+                    });
+                }
+
+                // check if it is longer than 2 characters
+                if token.len() > 2 {
+                    result.warnings.push(ValidationWarning {
+                        kind: ValidationWarnings::UnusualToken(token.clone(), TokenErrors::TooLong),
+                        node_name: "__lexer__".to_string(),
+                    });
+                }
+
+                // check if it is not ascii
+                if !token.chars().all(|c| c.is_ascii()) {
+                    result.warnings.push(ValidationWarning {
+                        kind: ValidationWarnings::UnusualToken(
+                            token.clone(),
+                            TokenErrors::NotAscii,
+                        ),
+                        node_name: "__lexer__".to_string(),
+                    });
+                }
+            }
+        }
+    }
 
     impl Grammar {
         /// Validates the grammar
         pub fn validate(&self, lexer: &Lexer) -> ValidationResult {
             let mut result = ValidationResult::new();
+            lexer.validate_tokens(&mut result);
 
             for node in self.nodes.values() {
                 self.validate_node(node, lexer, &mut result);
@@ -409,7 +478,7 @@ pub mod validator {
                     Commands::Compare {
                         left,
                         right,
-                        comparison,
+                        comparison: _,
                         rules,
                     } => {
                         match self.globals.get(left) {
@@ -446,8 +515,8 @@ pub mod validator {
                             self.validate_rule(rule, node, lexer, laf, result);
                         }
                     }
-                    Commands::Error { message } => (),
-                    Commands::HardError { set } => (),
+                    Commands::Error { message: _ } => (),
+                    Commands::HardError { set: _ } => (),
                     Commands::Goto { label } => {
                         laf.lost_labels.push(label.clone());
                     }
@@ -460,7 +529,7 @@ pub mod validator {
                         }
                         laf.found_labels.push(name.clone());
                     }
-                    Commands::Print { message } => (),
+                    Commands::Print { message: _ } => (),
                 },
             }
         }
@@ -470,7 +539,7 @@ pub mod validator {
             token: &MatchToken,
             node: &Node,
             lexer: &Lexer,
-            laf: &mut LostAndFound,
+            _laf: &mut LostAndFound,
             result: &mut ValidationResult,
         ) {
             match token {
@@ -507,39 +576,6 @@ pub mod validator {
                         if !lexer.token_kinds.iter().any(|k| k == txt) {
                             result.errors.push(ValidationError {
                                 kind: ValidationErrors::TokenNotFound(txt.clone()),
-                                node_name: node.name.clone(),
-                            });
-                        }
-
-                        // check if it starts with a number
-                        let first = txt.chars().next().unwrap();
-                        if first.is_numeric() {
-                            result.warnings.push(ValidationWarning {
-                                kind: ValidationWarnings::UnusualToken(txt.clone()),
-                                node_name: node.name.clone(),
-                            });
-                        }
-
-                        // check if it contains a whitespace
-                        if txt.chars().any(|c| c.is_whitespace()) {
-                            result.warnings.push(ValidationWarning {
-                                kind: ValidationWarnings::UnusualToken(txt.clone()),
-                                node_name: node.name.clone(),
-                            });
-                        }
-
-                        // check if it is longer than 2 characters
-                        if txt.len() > 2 {
-                            result.warnings.push(ValidationWarning {
-                                kind: ValidationWarnings::UnusualToken(txt.clone()),
-                                node_name: node.name.clone(),
-                            });
-                        }
-
-                        // check if it is not ascii
-                        if !txt.chars().all(|c| c.is_ascii()) {
-                            result.warnings.push(ValidationWarning {
-                                kind: ValidationWarnings::UnusualToken(txt.clone()),
                                 node_name: node.name.clone(),
                             });
                         }
@@ -816,10 +852,36 @@ pub mod validator {
             }
         }
 
+        /// Returns true if there are no errors and no warnings
+        ///
+        /// Choose this over `pass` for production code
+        ///
+        /// ```rust
+        /// let result = grammar.validate(&lexer);
+        /// if result.success() {
+        ///    println!("Grammar is valid and production ready");
+        /// } else {
+        ///   println!("Grammar is not valid");
+        /// }
+        /// ```
+        ///
         pub fn success(&self) -> bool {
             self.errors.is_empty() && self.warnings.is_empty()
         }
 
+        /// Returns true if there are no errors
+        ///
+        /// Choose this over `success` for testing code
+        ///
+        /// ```rust
+        /// let result = grammar.validate(&lexer);
+        /// if result.pass() {
+        ///   println!("Grammar is valid and good for testing");
+        /// } else {
+        ///  println!("Grammar is not valid");
+        /// }
+        /// ```
+        ///
         pub fn pass(&self) -> bool {
             self.errors.is_empty()
         }
@@ -842,6 +904,7 @@ pub mod validator {
         TokenNotFound(String),
         DuplicateLabel(String),
         LabelNotFound(String),
+        TokenCollision(String),
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -856,8 +919,16 @@ pub mod validator {
         UsedDebug,
         UsedPrint,
         UsedDepricated(Depricated),
-        UnusualToken(String),
+        UnusualToken(String, TokenErrors),
         UnusedLabel(String),
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub enum TokenErrors {
+        NotAscii,
+        ContainsWhitespace,
+        TooLong,
+        StartsNumeric,
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
