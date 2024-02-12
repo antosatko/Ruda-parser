@@ -19,6 +19,7 @@ I intend to add a grammar file format in the future for easier configuration.
 - [ ] WASM support
 - [ ] Port to other languages
 - [ ] CLI tool for parsing text
+- [x] Validaton module
 
 ## Usage
 
