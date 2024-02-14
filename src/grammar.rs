@@ -9,6 +9,8 @@ pub struct Grammar {
     pub nodes: HashMap<String, Node>,
     pub enumerators: HashMap<String, Enumerator>,
     pub globals: HashMap<String, VariableKind>,
+    /// If true, the parser will throw an error if the last token is not EOF
+    pub eof: bool,
 }
 
 impl Grammar {
@@ -17,6 +19,7 @@ impl Grammar {
             nodes: HashMap::new(),
             enumerators: HashMap::new(),
             globals: HashMap::new(),
+            eof: true,
         }
     }
 
@@ -83,7 +86,7 @@ pub enum Rule {
     /// If none of the tokens is matched, the rules for the else branch will be executed
     MaybeOneOf {
         /// Tokens that will be matched
-        is_one_of: Vec<(MatchToken, Rules, Vec<Parameters>)>,
+        is_one_of: Vec<OneOf>,
         /// Rules that will be executed if none of the tokens is matched
         isnt: Rules,
     },
@@ -387,9 +390,7 @@ pub mod validator {
                 } => {
                     self.validate_token(token, node, lexer, laf, result);
                     self.validate_parameters(parameters, node, laf, result);
-                    for rule in rules {
-                        self.validate_rule(rule, node, lexer, laf, result);
-                    }
+                    self.validate_ruleblock(rules, node, lexer, laf, result)
                 }
                 Rule::Isnt {
                     token,
@@ -398,17 +399,13 @@ pub mod validator {
                 } => {
                     self.validate_token(token, node, lexer, laf, result);
                     self.validate_parameters(parameters, node, laf, result);
-                    for rule in rules {
-                        self.validate_rule(rule, node, lexer, laf, result);
-                    }
+                    self.validate_ruleblock(rules, node, lexer, laf, result)
                 }
                 Rule::IsOneOf { tokens } => {
                     for one_of in tokens {
                         self.validate_token(&one_of.token, node, lexer, laf, result);
                         self.validate_parameters(&one_of.parameters, node, laf, result);
-                        for rule in &one_of.rules {
-                            self.validate_rule(rule, node, lexer, laf, result);
-                        }
+                        self.validate_ruleblock(&one_of.rules, node, lexer, laf, result)
                     }
                 }
                 Rule::Maybe {
@@ -419,24 +416,16 @@ pub mod validator {
                 } => {
                     self.validate_token(token, node, lexer, laf, result);
                     self.validate_parameters(parameters, node, laf, result);
-                    for rule in is {
-                        self.validate_rule(rule, node, lexer, laf, result);
-                    }
-                    for rule in isnt {
-                        self.validate_rule(rule, node, lexer, laf, result);
-                    }
+                    self.validate_ruleblock(is, node, lexer, laf, result);
+                    self.validate_ruleblock(isnt, node, lexer, laf, result);
                 }
                 Rule::MaybeOneOf { is_one_of, isnt } => {
-                    for (token, rules, parameters) in is_one_of {
+                    for OneOf { token, rules, parameters } in is_one_of {
                         self.validate_token(token, node, lexer, laf, result);
                         self.validate_parameters(parameters, node, laf, result);
-                        for rule in rules {
-                            self.validate_rule(rule, node, lexer, laf, result);
-                        }
+                        self.validate_ruleblock(rules, node, lexer, laf, result);
                     }
-                    for rule in isnt {
-                        self.validate_rule(rule, node, lexer, laf, result);
-                    }
+                    self.validate_ruleblock(isnt, node, lexer, laf, result);
                 }
                 Rule::While {
                     token,
@@ -445,14 +434,10 @@ pub mod validator {
                 } => {
                     self.validate_token(token, node, lexer, laf, result);
                     self.validate_parameters(parameters, node, laf, result);
-                    for rule in rules {
-                        self.validate_rule(rule, node, lexer, laf, result);
-                    }
+                    self.validate_ruleblock(rules, node, lexer, laf, result)
                 }
                 Rule::Loop { rules } => {
-                    for rule in rules {
-                        self.validate_rule(rule, node, lexer, laf, result);
-                    }
+                    self.validate_ruleblock(rules, node, lexer, laf, result)
                 }
                 Rule::Until {
                     token,
@@ -461,17 +446,13 @@ pub mod validator {
                 } => {
                     self.validate_token(token, node, lexer, laf, result);
                     self.validate_parameters(parameters, node, laf, result);
-                    for rule in rules {
-                        self.validate_rule(rule, node, lexer, laf, result);
-                    }
+                    self.validate_ruleblock(rules, node, lexer, laf, result)
                 }
                 Rule::UntilOneOf { tokens } => {
                     for one_of in tokens {
                         self.validate_token(&one_of.token, node, lexer, laf, result);
                         self.validate_parameters(&one_of.parameters, node, laf, result);
-                        for rule in &one_of.rules {
-                            self.validate_rule(rule, node, lexer, laf, result);
-                        }
+                        self.validate_ruleblock(&one_of.rules, node, lexer, laf, result)
                     }
                 }
                 Rule::Command { command } => match command {
@@ -532,6 +513,22 @@ pub mod validator {
                     Commands::Print { message: _ } => (),
                 },
             }
+        }
+
+        pub fn validate_ruleblock(
+            &self,
+            ruleblock: &Vec<Rule>,
+            node: &Node,
+            lexer: &Lexer,
+            laf: &mut LostAndFound,
+            result: &mut ValidationResult,
+        ) {
+            let steps = laf.steps;
+            for rule in ruleblock {
+                laf.steps += 1;
+                self.validate_rule(rule, node, lexer, laf, result);
+            }
+            laf.steps = steps;
         }
 
         pub fn validate_token(
@@ -820,11 +817,20 @@ pub mod validator {
                             node_name: node.name.clone(),
                         });
                     }
-                    Parameters::Back(_) => {
+                    Parameters::Back(n) => {
                         result.warnings.push(ValidationWarning {
                             kind: ValidationWarnings::UsedDepricated(Depricated::Back),
                             node_name: node.name.clone(),
                         });
+                        if *n as usize > laf.steps {
+                            result.errors.push(ValidationError {
+                                kind: ValidationErrors::CannotGoBackMoreThan {
+                                    steps: *n as usize,
+                                    max: laf.steps,
+                                },
+                                node_name: node.name.clone(),
+                            });
+                        }
                     }
                     Parameters::Return => (),
                     Parameters::Break(_) => (),
@@ -905,6 +911,10 @@ pub mod validator {
         DuplicateLabel(String),
         LabelNotFound(String),
         TokenCollision(String),
+        CannotGoBackMoreThan{
+            steps: usize,
+            max: usize,
+        }
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -945,6 +955,8 @@ pub mod validator {
     pub struct LostAndFound {
         pub lost_labels: Vec<String>,
         pub found_labels: Vec<String>,
+        /// The maximum number of steps that can be taken back
+        pub steps: usize,
     }
 
     impl LostAndFound {
@@ -952,6 +964,7 @@ pub mod validator {
             Self {
                 lost_labels: Vec::new(),
                 found_labels: Vec::new(),
+                steps: 0,
             }
         }
 

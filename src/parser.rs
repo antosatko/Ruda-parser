@@ -42,7 +42,28 @@ impl Parser {
             tokens,
             text,
         ) {
-            Ok(node) => node,
+            Ok(node) => {
+                if !grammar.eof {
+                    node
+                } else {
+                    // If the grammar has an eof token, we need to check if the cursor is at the end of the tokens
+                    // Consume all the whitespace tokens
+                    while cursor.idx < tokens.len() && tokens[cursor.idx].kind.is_whitespace() {
+                        cursor.idx += 1;
+                    }
+                    if let TokenKinds::Control(crate::lexer::ControlTokenKind::Eof) =
+                        tokens[cursor.idx].kind
+                    {
+                        node
+                    } else {
+                        return Err(ParseError {
+                            kind: ParseErrors::MissingEof,
+                            location: tokens[cursor.idx].location.clone(),
+                            node: Some(node),
+                        });
+                    }
+                }
+            }
             Err((err, _)) => return Err(err),
         };
 
@@ -59,6 +80,7 @@ impl Parser {
         tokens: &Vec<Token>,
         text: &str,
     ) -> Result<Node, (ParseError, Node)> {
+        #[cfg(feature = "debug")]
         println!("-- start: {}, cursor: {:?}", name, cursor);
         let mut node = match Node::from_grammar(grammar, name) {
             Ok(node) => node,
@@ -92,6 +114,7 @@ impl Parser {
             text,
         );
 
+        #[cfg(feature = "debug")]
         println!("-- end: {}, cursor: {:?}", name, cursor);
 
         // If the node has not set the last_string_idx, we set it to the end of the last token
@@ -164,11 +187,13 @@ impl Parser {
                     });
                 }
             }
+            #[cfg(feature = "debug")]
             println!(
                 "tok: <{}> kind: {:?}",
                 lexer.stringify(&tokens[cursor.idx], text),
                 tokens[cursor.idx].kind
             );
+            #[cfg(feature = "debug")]
             println!("rule: {:?}", rule);
             // stringifying the token
             match rule {
@@ -269,6 +294,7 @@ impl Parser {
                     } in pos_tokens
                     {
                         use TokenCompare::*;
+                        #[cfg(feature = "debug")]
                         println!("trying option: {:?}", token);
                         match self.match_token(
                             grammar,
@@ -281,6 +307,7 @@ impl Parser {
                             text,
                         )? {
                             Is(val) => {
+                                #[cfg(feature = "debug")]
                                 println!("success");
                                 found = true;
                                 self.parse_parameters(
@@ -314,11 +341,13 @@ impl Parser {
                             IsNot(err) => match err.node {
                                 Some(ref node) => {
                                     if node.harderror {
+                                        #[cfg(feature = "debug")]
                                         println!("non recoverable error: {:?}", err);
                                         return Err(err);
                                     }
                                 }
                                 None => {
+                                    #[cfg(feature = "debug")]
                                     println!("recoverable error: {:?}", err);
                                     cursor.to_advance = false;
                                 }
@@ -408,7 +437,12 @@ impl Parser {
                 }
                 grammar::Rule::MaybeOneOf { is_one_of, isnt } => {
                     let mut found = false;
-                    for (token, rules, parameters) in is_one_of {
+                    for OneOf {
+                        token,
+                        rules,
+                        parameters,
+                    } in is_one_of
+                    {
                         use TokenCompare::*;
                         match self.match_token(
                             grammar,
@@ -528,6 +562,7 @@ impl Parser {
                             None => (),
                         },
                     }
+                    #[cfg(feature = "debug")]
                     println!("WHILE DONE, CURSOR.TO_ADVANCE = {}", cursor.to_advance)
                 }
                 grammar::Rule::Until {
@@ -702,7 +737,10 @@ impl Parser {
                         msg_bus.send(Msg::Goto(label.to_string()));
                     }
                     grammar::Commands::Label { name: _ } => (),
-                    grammar::Commands::Print { message } => println!("{}", message),
+                    grammar::Commands::Print { message: _msg } => {
+                        #[cfg(feature = "debug")]
+                        println!("{}", _msg)
+                    }
                 },
                 grammar::Rule::Loop { rules } => {
                     self.parse_rules(
@@ -934,8 +972,14 @@ impl Parser {
                 Ok(TokenCompare::Is(Nodes::Token(current_token.clone())))
             }
             grammar::MatchToken::Enumerator(enumerator) => {
-                println!("keys: {:?}", grammar.enumerators.keys().collect::<Vec<&String>>());
+                #[cfg(feature = "debug")]
+                println!(
+                    "keys: {:?}",
+                    grammar.enumerators.keys().collect::<Vec<&String>>()
+                );
+                #[cfg(feature = "debug")]
                 println!("key: {enumerator}");
+                #[cfg(feature = "debug")]
                 println!("got: {}", grammar.enumerators.get(enumerator).is_some());
                 let enumerator = match grammar.enumerators.get(enumerator) {
                     Some(enumerator) => enumerator,
@@ -980,6 +1024,7 @@ impl Parser {
                         }
                     }
                 };
+                #[cfg(feature = "debug")]
                 println!("matched: {:?}", token);
                 Ok(TokenCompare::Is(token))
             }
@@ -1036,22 +1081,30 @@ impl Parser {
                         })?,
                     };
                 }
-                grammar::Parameters::Print(str) => println!("{}", str),
+                grammar::Parameters::Print(_str) => {
+                    #[cfg(feature = "debug")]
+                    println!("{}", _str)
+                }
                 grammar::Parameters::Debug(variable) => match variable {
-                    Some(ident) => {
-                        let kind = match node.variables.get(ident) {
-                            Some(kind) => kind,
-                            None => {
-                                return Err(ParseError {
-                                    kind: ParseErrors::VariableNotFound(ident.to_string()),
-                                    location: tokens[cursor.idx].location.clone(),
-                                    node: None,
-                                })
-                            }
-                        };
-                        println!("{:?}", kind);
+                    Some(_ident) => {
+                        #[cfg(feature = "debug")]
+                        {
+                            let kind = match node.variables.get(_ident) {
+                                Some(kind) => kind,
+                                None => {
+                                    return Err(ParseError {
+                                        kind: ParseErrors::VariableNotFound(_ident.to_string()),
+                                        location: tokens[cursor.idx].location.clone(),
+                                        node: None,
+                                    })
+                                }
+                            };
+                            println!("{:?}", kind);
+                        }
                     }
-                    None => {
+                    None =>
+                    {
+                        #[cfg(feature = "debug")]
                         if cursor.idx >= tokens.len() {
                             println!("Eof");
                         } else {
@@ -1470,9 +1523,13 @@ pub enum ParseErrors {
     ExpectedOneOf(Vec<MatchToken>),
     /// Could not find token
     CouldNotFindToken(MatchToken),
+    /// This error occurers when the parser ends on different token than eof
+    ///
+    /// This behaviour can be changed by setting the `eof` field in the grammar
+    MissingEof,
 
     /// Control key
-    Ok
+    Ok,
 }
 
 impl std::fmt::Debug for ParseErrors {
@@ -1509,6 +1566,7 @@ impl std::fmt::Debug for ParseErrors {
             }
             ParseErrors::CouldNotFindToken(kind) => write!(f, "Could not find token {:?}", kind),
             ParseErrors::Ok => write!(f, "If you see this, it could be a bug in the parser"),
+            ParseErrors::MissingEof => write!(f, "Could not parse to the end of the file"),
         }
     }
 }

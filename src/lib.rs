@@ -1,3 +1,6 @@
+#[cfg(all(feature = "no_std", feature = "serde"))]
+compile_error!("feature `no_std` and `serde` are mutually exclusive");
+
 pub mod api;
 pub mod grammar;
 pub mod lexer;

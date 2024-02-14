@@ -275,36 +275,30 @@ pub fn gen_parser() -> Parser {
     variables.insert("list".to_string(), grammar::VariableKind::NodeList);
     let entry = Node {
         name: "entry".to_string(),
-        rules: vec![
-            Rule::Loop {
-                rules: vec![Rule::IsOneOf {
-                    tokens: vec![
-                        OneOf {
-                            token: MatchToken::Node("KWImport".to_string()),
-                            rules: vec![],
-                            parameters: vec![Parameters::Set("list".to_string())],
-                        },
-                        OneOf {
-                            token: MatchToken::Node("KWFunction".to_string()),
-                            rules: vec![],
-                            parameters: vec![Parameters::Set("list".to_string())],
-                        },
-                        OneOf {
-                            token: MatchToken::Token(TokenKinds::Control(ControlTokenKind::Eof)),
-                            rules: vec![],
-                            parameters: vec![
-                                Parameters::Goto("end".to_string()),
-                            ],
-                        },
-                    ],
-                }],
+        rules: vec![Rule::Loop {
+            rules: vec![Rule::MaybeOneOf {
+                is_one_of: vec![
+                    OneOf {
+                        token: MatchToken::Node("KWImport".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("list".to_string())],
+                    },
+                    OneOf {
+                        token: MatchToken::Node("KWFunction".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("list".to_string())],
+                    },
+                ],
+                isnt: vec![
+                    Rule::Command { command: Commands::Goto { label: "end".to_string() } }
+                ],
+            }],
+        },
+        Rule::Command {
+            command: Commands::Label {
+                name: "end".to_string(),
             },
-            Rule::Command {
-                command: Commands::Label {
-                    name: "end".to_string(),
-                },
-            },
-        ],
+        },],
         variables,
     };
     parser.grammar.nodes.insert(entry.name.clone(), entry);
@@ -493,7 +487,10 @@ pub fn gen_parser() -> Parser {
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Text),
                 rules: vec![],
-                parameters: vec![Parameters::Set("path".to_string()), Parameters::HardError(true)],
+                parameters: vec![
+                    Parameters::Set("path".to_string()),
+                    Parameters::HardError(true),
+                ],
             },
             Rule::While {
                 token: MatchToken::Token(TokenKinds::Token(".".to_string())),
@@ -712,8 +709,7 @@ mod tests {
 
         assert!(validation.pass(), "Grammar is not valid"); // change .pass() to .success() for production
 
-        let test_string = 
-r##"import "#io" as io
+        let test_string = r##"import "#io" as io
 
 fun main() {
     io.println(50)

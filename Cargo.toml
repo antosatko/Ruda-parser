@@ -7,5 +7,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde_json = { version ="1.0.113"}
-serde = {version = "*", features = ["derive"], default-features = false}
+serde_json = { version ="1.0.113", optional = true }
+serde = {version = "*", features = ["derive"], default-features = false, optional = true}
+
+
+[features]
+# The default feature set (in development)
+default = ["serde"]
+# Enable serde and serde_json support (in development)
+serde = ["dep:serde", "dep:serde_json"]
+# Print debug information during parsing
+debug = []
+# Enable no_std support (in development)
+no_std = []
+
