@@ -472,6 +472,7 @@ impl Parser {
                         )? {
                             Is(val) => {
                                 found = true;
+                                let is_token = val.is_token();
                                 self.parse_parameters(
                                     grammar,
                                     lexer,
@@ -485,7 +486,9 @@ impl Parser {
                                     tokens,
                                     text,
                                 )?;
-                                cursor.to_advance = true;
+                                if is_token {
+                                    cursor.to_advance = true;
+                                }
                                 self.parse_rules(
                                     grammar,
                                     lexer,
@@ -1407,6 +1410,22 @@ pub struct ParseResult {
 pub enum Nodes {
     Node(Node),
     Token(Token),
+}
+
+impl Nodes {
+    pub fn is_node(&self) -> bool {
+        match self {
+            Nodes::Node(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_token(&self) -> bool {
+        match self {
+            Nodes::Token(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

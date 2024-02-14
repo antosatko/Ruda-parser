@@ -1,10 +1,8 @@
-#![no_std]
-
 extern crate alloc;
 use alloc::vec;
 use alloc::string::*;
 
-use rparse::Map;
+type Map = std::collections::HashMap<String, VariableKind>;
 
 
 
@@ -694,7 +692,7 @@ pub fn gen_parser() -> Parser {
 
     parser
 }
-/*
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
@@ -717,10 +715,12 @@ mod tests {
 
         assert!(validation.pass(), "Grammar is not valid"); // change .pass() to .success() for production
 
-        let test_string = r##"import "#io" as io
+        let test_string = 
+r##"
+import "#io"
 
 fun main() {
-    io.println(50)
+    io.println("Hello, World!")
 }"##;
 
         let tokens = parser.lexer.lex_utf8(test_string);
@@ -734,4 +734,3 @@ fun main() {
         panic!("{:#?}", ast.unwrap());
     }
 }
-*/

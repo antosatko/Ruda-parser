@@ -155,14 +155,14 @@ impl Lexer {
             }
 
             // Match token kinds
-            'tokens: for token_kind in &self.token_kinds {
+            'tokens: for token_kind in self.token_kinds.iter().rev() {
                 let tok_chars = token_kind.char_indices();
                 let tok_len = tok_chars.count();
                 if i + tok_len > len {
                     // All the remaining tokens are longer than the remaining text
                     //
                     // This is a performance optimization
-                    break;
+                    continue;
                 }
                 for (j, (_, c)) in token_kind.char_indices().enumerate() {
                     if c != chars[i + j].1 {
@@ -261,13 +261,13 @@ impl Lexer {
                 continue;
             }
 
-            for token_kind in &self.token_kinds {
+            for token_kind in self.token_kinds.iter().rev() {
                 let tok_len = token_kind.len();
                 if i + tok_len > len {
                     // All the remaining tokens are longer than the remaining text
                     //
                     // This is a performance optimization
-                    break;
+                    continue;
                 }
                 let token = &chars[i..i + tok_len];
                 if token == token_kind.as_bytes() {
