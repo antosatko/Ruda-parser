@@ -1,4 +1,12 @@
-use std::collections::HashMap;
+#![no_std]
+
+extern crate alloc;
+use alloc::vec;
+use alloc::string::*;
+
+use rparse::Map;
+
+
 
 use rparse::grammar;
 use rparse::{grammar::*, lexer::*, Parser};
@@ -271,7 +279,7 @@ pub fn gen_parser() -> Parser {
         .enumerators
         .insert(literals.name.clone(), literals);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("list".to_string(), grammar::VariableKind::NodeList);
     let entry = Node {
         name: "entry".to_string(),
@@ -303,7 +311,7 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(entry.name.clone(), entry);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("file".to_string(), grammar::VariableKind::Node);
     variables.insert("alias".to_string(), grammar::VariableKind::Node);
     let import = Node {
@@ -333,7 +341,7 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(import.name.clone(), import);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
     variables.insert("parameters".to_string(), grammar::VariableKind::NodeList);
     variables.insert("return_type".to_string(), grammar::VariableKind::Node);
@@ -395,7 +403,7 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(function.name.clone(), function);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("nodes".to_string(), grammar::VariableKind::NodeList);
     let block = Node {
         name: "block".to_string(),
@@ -429,7 +437,7 @@ pub fn gen_parser() -> Parser {
         .enumerators
         .insert(block_line.name.clone(), block_line);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
     variables.insert("type".to_string(), grammar::VariableKind::Node);
     let type_specifier = Node {
@@ -458,7 +466,7 @@ pub fn gen_parser() -> Parser {
         .nodes
         .insert(type_specifier.name.clone(), type_specifier);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("refs".to_string(), grammar::VariableKind::Number);
     variables.insert("path".to_string(), grammar::VariableKind::Node);
     let type_ = Node {
@@ -479,7 +487,7 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(type_.name.clone(), type_);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("path".to_string(), grammar::VariableKind::NodeList);
     let path = Node {
         name: "path".to_string(),
@@ -506,7 +514,7 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(path.name.clone(), path);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("nodes".to_string(), grammar::VariableKind::NodeList);
     let expression = Node {
         name: "expression".to_string(),
@@ -536,7 +544,7 @@ pub fn gen_parser() -> Parser {
         .nodes
         .insert(expression.name.clone(), expression);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("unaries".to_string(), grammar::VariableKind::NodeList);
     variables.insert("path".to_string(), grammar::VariableKind::Node);
     variables.insert("tail".to_string(), grammar::VariableKind::Node);
@@ -593,7 +601,7 @@ pub fn gen_parser() -> Parser {
         .enumerators
         .insert(tail_options.name.clone(), tail_options);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("field".to_string(), grammar::VariableKind::Node);
     variables.insert("next".to_string(), grammar::VariableKind::Node);
     let field = Node {
@@ -620,7 +628,7 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(field.name.clone(), field);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("index".to_string(), grammar::VariableKind::Node);
     let index = Node {
         name: "index".to_string(),
@@ -645,7 +653,7 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(index.name.clone(), index);
 
-    let mut variables = HashMap::new();
+    let mut variables = Map::new();
     variables.insert("arguments".to_string(), grammar::VariableKind::NodeList);
     let call = Node {
         name: "call".to_string(),
@@ -686,7 +694,7 @@ pub fn gen_parser() -> Parser {
 
     parser
 }
-
+/*
 #[cfg(test)]
 mod tests {
     use std::io::Write;
@@ -726,3 +734,4 @@ fun main() {
         panic!("{:#?}", ast.unwrap());
     }
 }
+*/

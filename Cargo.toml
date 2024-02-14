@@ -9,15 +9,16 @@ edition = "2021"
 [dependencies]
 serde_json = { version ="1.0.113", optional = true }
 serde = {version = "*", features = ["derive"], default-features = false, optional = true}
+cfg-if = "1.0.0"
 
 
 [features]
 # The default feature set (in development)
-default = ["serde"]
+default = ["serde", "std"]
 # Enable serde and serde_json support (in development)
 serde = ["dep:serde", "dep:serde_json"]
 # Print debug information during parsing
-debug = []
-# Enable no_std support (in development)
-no_std = []
+debug = ["std"]
+# Enable the use of the `std` library (in development)
+std = []
 

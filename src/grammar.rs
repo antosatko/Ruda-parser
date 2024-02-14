@@ -1,14 +1,26 @@
-use std::collections::HashMap;
+use crate::Map;
 
 use crate::lexer::TokenKinds;
 
 use serde::{Deserialize, Serialize};
 
+// Choose between std and alloc
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        extern crate std;
+        use std::prelude::v1::*;
+    } else {
+        extern crate alloc;
+        use alloc::string::*;
+        use alloc::vec::*;
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Grammar {
-    pub nodes: HashMap<String, Node>,
-    pub enumerators: HashMap<String, Enumerator>,
-    pub globals: HashMap<String, VariableKind>,
+    pub nodes: Map<String, Node>,
+    pub enumerators: Map<String, Enumerator>,
+    pub globals: Map<String, VariableKind>,
     /// If true, the parser will throw an error if the last token is not EOF
     pub eof: bool,
 }
@@ -16,9 +28,9 @@ pub struct Grammar {
 impl Grammar {
     pub fn new() -> Grammar {
         Grammar {
-            nodes: HashMap::new(),
-            enumerators: HashMap::new(),
-            globals: HashMap::new(),
+            nodes: Map::new(),
+            enumerators: Map::new(),
+            globals: Map::new(),
             eof: true,
         }
     }
@@ -202,7 +214,7 @@ pub struct Node {
     /// Rules that will be executed when the node is matched
     pub rules: Rules,
     /// Variables that can be used in the node and will be accessible from the outside
-    pub variables: HashMap<String, VariableKind>,
+    pub variables: Map<String, VariableKind>,
 }
 
 /// A variable that can be used in a node
@@ -287,7 +299,7 @@ pub mod validator {
 
     impl Lexer {
         pub fn validate_tokens(&self, result: &mut ValidationResult) {
-            let mut tokens = Vec::new();
+            let mut tokens: Vec<String> = Vec::new();
             for token in &self.token_kinds {
                 // tokens that have already been validated can be ignored
                 if tokens.contains(token) {

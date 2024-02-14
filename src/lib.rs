@@ -1,10 +1,26 @@
-#[cfg(all(feature = "no_std", feature = "serde"))]
-compile_error!("feature `no_std` and `serde` are mutually exclusive");
+#![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod api;
 pub mod grammar;
 pub mod lexer;
 pub mod parser;
+
+// Choose between std and alloc
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        extern crate std;
+        use std::prelude::v1::*;
+
+        pub type Map<K, V> = std::collections::HashMap<K, V>;
+    } else {
+        extern crate alloc;
+        pub use alloc::string::*;
+        pub use alloc::vec::*;
+        use alloc::vec;
+
+        pub type Map<K, V> = alloc::collections::BTreeMap<K, V>;
+    }
+}
 
 use serde::{Deserialize, Serialize};
 
@@ -36,9 +52,10 @@ impl Parser {
 }
 
 #[cfg(test)]
+#[cfg(feature = "std")]
 mod tests {
-    use std::{collections::HashMap, io::Write, vec};
 
+    use std::io::Write;
 
     use crate::lexer::TokenKinds;
 
@@ -117,7 +134,7 @@ mod tests {
 
         let tokens = parser.lexer.lex_utf8(txt).unwrap();
 
-        let mut variables = HashMap::new();
+        let mut variables = Map::new();
         variables.insert("ident".to_string(), VariableKind::Node);
         variables.insert("type".to_string(), VariableKind::Node);
         variables.insert("value".to_string(), VariableKind::Node);
@@ -182,7 +199,7 @@ mod tests {
             ],
             variables,
         });
-        let mut variables = HashMap::new();
+        let mut variables = Map::new();
         variables.insert("nodes".to_string(), VariableKind::NodeList);
         parser.grammar.add_node(grammar::Node {
             name: "value".to_string(),
@@ -252,7 +269,7 @@ mod tests {
 
         let tokens = parser.lexer.lex_utf8(txt).unwrap();
 
-        let mut variables = HashMap::new();
+        let mut variables = Map::new();
         variables.insert("start".to_string(), VariableKind::Node);
         variables.insert("end".to_string(), VariableKind::Node);
         parser.grammar.add_node(grammar::Node {
@@ -273,7 +290,7 @@ mod tests {
             variables,
         });
 
-        let mut variables = HashMap::new();
+        let mut variables = Map::new();
         variables.insert("strings".to_string(), VariableKind::NodeList);
         variables.insert("count".to_string(), VariableKind::Number);
         variables.insert("zero".to_string(), VariableKind::Number);
@@ -362,9 +379,8 @@ mod tests {
 
         let lex_start = std::time::Instant::now();
         let tokens = parser.lexer.lex_utf8(&txt).unwrap();
-        println!("lex time: {:?}", lex_start.elapsed());
 
-        let variables = HashMap::new();
+        let variables = Map::new();
         parser.grammar.add_node(grammar::Node {
             name: "string".to_string(),
             rules: vec![
@@ -383,7 +399,7 @@ mod tests {
             variables,
         });
 
-        let mut variables = HashMap::new();
+        let mut variables = Map::new();
         variables.insert("strings".to_string(), VariableKind::NodeList);
         variables.insert("count".to_string(), VariableKind::Number);
         variables.insert("zero".to_string(), VariableKind::Number);
@@ -415,11 +431,8 @@ mod tests {
             variables,
         });
 
-        let parse_start = std::time::Instant::now();
         let result = parser.parse(&tokens, &txt).unwrap();
         let strings = result.entry.get_list("strings");
-        println!("strings: {}", strings.len());
-        println!("parse time: {:?}", parse_start.elapsed());
         // verify the result
         assert_eq!(strings.len(), meta.lines);
         for s in strings {
@@ -440,8 +453,6 @@ mod tests {
         let txt = "let a: int = 500 * 9;";
 
         let tokens = parser.lexer.lex_utf8(txt).unwrap();
-
-        println!("{:#?}", tokens);
 
         let result = parser.parse(&tokens, txt).unwrap();
 

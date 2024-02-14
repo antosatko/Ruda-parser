@@ -3,6 +3,21 @@ use crate::{
     parser::{self},
 };
 
+// Choose between std and alloc
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        extern crate std;
+        use std::prelude::v1::*;
+    } else {
+        extern crate alloc;
+        use alloc::string::*;
+        use alloc::vec::*;
+        use alloc::vec;
+        use core::fmt;
+        use alloc::format;
+    }
+}
+
 impl<'a> parser::Nodes {
     /// Returns name of node
     ///
@@ -111,8 +126,8 @@ impl<'a> parser::Node {
     /// Panics if the variable is not a node or if it does not exist
     pub fn try_get_node(&self, variable: &str) -> &Option<parser::Nodes> {
         match self.variables.get(variable) {
-            Some(node) => match &node {
-                &parser::VariableKind::Node(node) => node,
+            Some(node) => match node {
+                parser::VariableKind::Node(ref node) => node,
                 _ => panic!(
                     "Variable {} is not a node for node: {:?}",
                     variable, self.name
@@ -127,8 +142,8 @@ impl<'a> parser::Node {
     /// Panics if the variable is not a list of nodes or if it does not exist
     pub fn get_list(&self, variable: &str) -> &Vec<parser::Nodes> {
         match self.variables.get(variable) {
-            Some(array) => match &array {
-                &parser::VariableKind::NodeList(array) => array,
+            Some(ref array) => match array {
+                parser::VariableKind::NodeList(array) => &array,
                 _ => panic!(
                     "Variable {} is not an array for node: {:?}",
                     variable, self.name

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use crate::Map;
 
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +8,22 @@ use crate::{
     grammar::{self, Grammar, MatchToken, OneOf},
     lexer::{Lexer, TextLocation, Token, TokenKinds},
 };
+
+// Choose between std and alloc
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        extern crate std;
+        use std::prelude::v1::*;
+        use std::fmt;
+    } else {
+        extern crate alloc;
+        use alloc::string::*;
+        use alloc::vec::*;
+        use alloc::vec;
+        use core::fmt;
+        use alloc::format;
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Parser {
@@ -76,7 +92,7 @@ impl Parser {
         lexer: &Lexer,
         name: &str,
         cursor: &mut Cursor,
-        globals: &mut HashMap<String, VariableKind>,
+        globals: &mut Map<String, VariableKind>,
         tokens: &Vec<Token>,
         text: &str,
     ) -> Result<Node, (ParseError, Node)> {
@@ -165,7 +181,7 @@ impl Parser {
         lexer: &Lexer,
         rules: &Vec<grammar::Rule>,
         cursor: &mut Cursor,
-        globals: &mut HashMap<String, VariableKind>,
+        globals: &mut Map<String, VariableKind>,
         cursor_clone: &Cursor,
         node: &mut Node,
         tokens: &Vec<Token>,
@@ -299,7 +315,7 @@ impl Parser {
                         match self.match_token(
                             grammar,
                             lexer,
-                            token,
+                            &token,
                             cursor,
                             globals,
                             cursor_clone,
@@ -447,7 +463,7 @@ impl Parser {
                         match self.match_token(
                             grammar,
                             lexer,
-                            token,
+                            &token,
                             cursor,
                             globals,
                             cursor_clone,
@@ -892,7 +908,7 @@ impl Parser {
         lexer: &Lexer,
         token: &grammar::MatchToken,
         cursor: &mut Cursor,
-        globals: &mut HashMap<String, VariableKind>,
+        globals: &mut Map<String, VariableKind>,
         cursor_clone: &Cursor,
         tokens: &Vec<Token>,
         text: &str,
@@ -1041,7 +1057,7 @@ impl Parser {
         lexer: &Lexer,
         parameters: &Vec<grammar::Parameters>,
         cursor: &mut Cursor,
-        globals: &mut HashMap<String, VariableKind>,
+        globals: &mut Map<String, VariableKind>,
         _cursor_clone: &Cursor,
         node: &mut Node,
         value: Nodes,
@@ -1384,7 +1400,7 @@ enum TokenCompare {
 #[derive(Debug)]
 pub struct ParseResult {
     pub entry: Node,
-    pub globals: HashMap<String, VariableKind>,
+    pub globals: Map<String, VariableKind>,
 }
 
 #[derive(Debug, Clone)]
@@ -1396,7 +1412,7 @@ pub enum Nodes {
 #[derive(Debug, Clone)]
 pub struct Node {
     pub name: String,
-    pub variables: HashMap<String, VariableKind>,
+    pub variables: Map<String, VariableKind>,
     pub(crate) first_string_idx: usize,
     pub(crate) last_string_idx: usize,
     pub(crate) harderror: bool,
@@ -1406,7 +1422,7 @@ impl Node {
     pub fn new(name: String) -> Node {
         Node {
             name,
-            variables: HashMap::new(),
+            variables: Map::new(),
             first_string_idx: 0,
             last_string_idx: 0,
             harderror: false,
@@ -1430,9 +1446,9 @@ impl Node {
     }
 
     pub fn variables_from_grammar(
-        variables: &HashMap<String, grammar::VariableKind>,
-    ) -> Result<HashMap<String, VariableKind>, ParseError> {
-        let mut result = HashMap::new();
+        variables: &Map<String, grammar::VariableKind>,
+    ) -> Result<Map<String, VariableKind>, ParseError> {
+        let mut result = Map::new();
         for (key, value) in variables {
             let var = match value {
                 crate::grammar::VariableKind::Node => VariableKind::Node(None),
@@ -1476,8 +1492,8 @@ pub struct ParseError {
     node: Option<Node>,
 }
 
-impl std::fmt::Debug for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Debug for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} at {:?}", self.kind, self.location)?;
         match &self.node {
             Some(node) => write!(f, "\nError in node: {:?}", node.name),
@@ -1532,8 +1548,8 @@ pub enum ParseErrors {
     Ok,
 }
 
-impl std::fmt::Debug for ParseErrors {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Debug for ParseErrors {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ParseErrors::ParserNotFullyImplemented => write!(f, "Parser not fully implemented"),
             ParseErrors::NodeNotFound(name) => write!(f, "Node not found: {}", name),

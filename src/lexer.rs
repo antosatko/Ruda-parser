@@ -1,5 +1,21 @@
 use serde::{Deserialize, Serialize};
 
+// Choose between std and alloc
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        extern crate std;
+        use std::prelude::v1::*;
+        use std::fmt;
+    } else {
+        extern crate alloc;
+        use alloc::string::*;
+        use alloc::vec::*;
+        use alloc::vec;
+        use alloc::format;
+        use core::fmt;
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TokenKinds {
     /// A sequence of characters
@@ -35,8 +51,8 @@ pub struct PreprocessorError {
     pub len: usize,
 }
 
-impl std::fmt::Debug for PreprocessorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for PreprocessorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "An error occurred during lexing at line {} column {}: {}", self.location.line, self.location.column, self.message)
     }
 }
