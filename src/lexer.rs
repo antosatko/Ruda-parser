@@ -207,12 +207,14 @@ impl Lexer {
             column += j;
             i += j;
         }
-        tokens.push(Token {
-            index: i,
-            len: 0,
-            location: TextLocation::new(line, column),
-            kind: TokenKinds::Control(ControlTokenKind::Eof),
-        });
+        for _ in 0..5 {
+            tokens.push(Token {
+                index: i,
+                len: 0,
+                location: TextLocation::new(line, column),
+                kind: TokenKinds::Control(ControlTokenKind::Eof),
+            });
+        }
 
         for preprocessor in &self.preprocessors {
             tokens = preprocessor(text, tokens)?;

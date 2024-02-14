@@ -318,7 +318,10 @@ impl Parser {
                                         return Err(err);
                                     }
                                 }
-                                None => println!("recoverable error: {:?}", err),
+                                None => {
+                                    println!("recoverable error: {:?}", err);
+                                    cursor.to_advance = false;
+                                }
                             },
                         }
                     }
@@ -522,9 +525,10 @@ impl Parser {
                                     return Err(err);
                                 }
                             }
-                            None => ()
+                            None => (),
                         },
                     }
+                    println!("WHILE DONE, CURSOR.TO_ADVANCE = {}", cursor.to_advance)
                 }
                 grammar::Rule::Until {
                     token,
@@ -804,12 +808,13 @@ impl Parser {
                 match msg {
                     Msg::Return => return Ok(Msg::Return),
                     Msg::Break(n) => {
-                        if n == 1 {
-                            return Ok(Msg::Ok);
+                        return if n == 1 {
+                            Ok(Msg::Ok)
                         } else {
-                            return Ok(Msg::Break(n - 1));
+                            Ok(Msg::Break(n - 1))
                         }
                     }
+
                     Msg::Goto(label) => {
                         let mut j = 0;
                         loop {
@@ -888,7 +893,7 @@ impl Parser {
                         node: None,
                     }));
                 }
-                return Ok(TokenCompare::Is(Nodes::Token(current_token.clone())));
+                Ok(TokenCompare::Is(Nodes::Token(current_token.clone())))
             }
             grammar::MatchToken::Node(node_name) => {
                 match self.parse_node(grammar, lexer, node_name, cursor, globals, tokens, text) {
@@ -926,9 +931,12 @@ impl Parser {
                         node: None,
                     }));
                 }
-                return Ok(TokenCompare::Is(Nodes::Token(current_token.clone())));
+                Ok(TokenCompare::Is(Nodes::Token(current_token.clone())))
             }
             grammar::MatchToken::Enumerator(enumerator) => {
+                println!("keys: {:?}", grammar.enumerators.keys().collect::<Vec<&String>>());
+                println!("key: {enumerator}");
+                println!("got: {}", grammar.enumerators.get(enumerator).is_some());
                 let enumerator = match grammar.enumerators.get(enumerator) {
                     Some(enumerator) => enumerator,
                     None => {
@@ -944,7 +952,7 @@ impl Parser {
                 let token = loop {
                     if i >= enumerator.values.len() {
                         return Ok(TokenCompare::IsNot(ParseError {
-                            kind: ParseErrors::EnumeratorNotFound(enumerator.name.clone()),
+                            kind: ParseErrors::Ok,
                             location: tokens[cursor.idx].location.clone(),
                             node: None,
                         }));
@@ -972,11 +980,12 @@ impl Parser {
                         }
                     }
                 };
-                return Ok(TokenCompare::Is(token));
+                println!("matched: {:?}", token);
+                Ok(TokenCompare::Is(token))
             }
             grammar::MatchToken::Any => {
                 let token = tokens[cursor.idx].clone();
-                return Ok(TokenCompare::Is(Nodes::Token(token)));
+                Ok(TokenCompare::Is(Nodes::Token(token)))
             }
         }
     }
@@ -1461,6 +1470,9 @@ pub enum ParseErrors {
     ExpectedOneOf(Vec<MatchToken>),
     /// Could not find token
     CouldNotFindToken(MatchToken),
+
+    /// Control key
+    Ok
 }
 
 impl std::fmt::Debug for ParseErrors {
@@ -1496,6 +1508,7 @@ impl std::fmt::Debug for ParseErrors {
                 write!(f, "Expected one of {}", result)
             }
             ParseErrors::CouldNotFindToken(kind) => write!(f, "Could not find token {:?}", kind),
+            ParseErrors::Ok => write!(f, "If you see this, it could be a bug in the parser"),
         }
     }
 }
@@ -1545,4 +1558,3 @@ impl Msg {
         bus.send(self);
     }
 }
-

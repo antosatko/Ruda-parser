@@ -7,8 +7,6 @@ pub fn gen_parser() -> Parser {
     let mut parser = Parser::new();
 
     let tokens = vec![
-        "8 šunka".to_string(),
-        "8 šunka".to_string(),
         "+=".to_string(),
         "-=".to_string(),
         "*=".to_string(),
@@ -89,7 +87,7 @@ pub fn gen_parser() -> Parser {
                                 TokenKinds::Text => {
                                     let token = &tokens[i + 2];
                                     let text = &text[token.index..token.index + token.len];
-                                    match text.parse::<f64>() {
+                                    match text.parse::<u64>() {
                                         Ok(_) => {
                                             // it's a float with a decimal value
                                             new_tokens.push(Token {
@@ -193,6 +191,7 @@ pub fn gen_parser() -> Parser {
             MatchToken::Token(TokenKinds::Token("=".to_string())),
             MatchToken::Token(TokenKinds::Token("!=".to_string())),
             MatchToken::Token(TokenKinds::Token("&&".to_string())),
+            MatchToken::Token(TokenKinds::Token("||".to_string())),
         ],
     };
     parser
@@ -246,34 +245,6 @@ pub fn gen_parser() -> Parser {
         .enumerators
         .insert(unary_operators.name.clone(), unary_operators);
 
-    let setting_operators = Enumerator {
-        name: "setting_operators".to_string(),
-        values: vec![
-            MatchToken::Token(TokenKinds::Token("=".to_string())),
-            MatchToken::Token(TokenKinds::Token("+=".to_string())),
-            MatchToken::Token(TokenKinds::Token("-=".to_string())),
-            MatchToken::Token(TokenKinds::Token("*=".to_string())),
-            MatchToken::Token(TokenKinds::Token("/=".to_string())),
-        ],
-    };
-    parser
-        .grammar
-        .enumerators
-        .insert(setting_operators.name.clone(), setting_operators);
-
-    let types = Enumerator {
-        name: "types".to_string(),
-        values: vec![
-            MatchToken::Word("char".to_string()),
-            MatchToken::Word("int".to_string()),
-            MatchToken::Word("float".to_string()),
-            MatchToken::Word("bool".to_string()),
-            MatchToken::Word("string".to_string()),
-            MatchToken::Word("uint".to_string()),
-        ],
-    };
-    parser.grammar.enumerators.insert(types.name.clone(), types);
-
     let numbers = Enumerator {
         name: "numbers".to_string(),
         values: vec![
@@ -323,7 +294,6 @@ pub fn gen_parser() -> Parser {
                             rules: vec![],
                             parameters: vec![
                                 Parameters::Goto("end".to_string()),
-                                Parameters::Debug(None),
                             ],
                         },
                     ],
@@ -380,7 +350,7 @@ pub fn gen_parser() -> Parser {
             Rule::Is {
                 token: MatchToken::Word("fun".to_string()),
                 rules: vec![],
-                parameters: vec![Parameters::HardError(true), Parameters::Debug(None)],
+                parameters: vec![Parameters::HardError(true)],
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Text),
@@ -722,6 +692,8 @@ pub fn gen_parser() -> Parser {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use super::*;
 
     #[test]
@@ -740,15 +712,20 @@ mod tests {
 
         assert!(validation.pass(), "Grammar is not valid"); // change .pass() to .success() for production
 
-        let test_string = r##"import "#io" as io
+        let test_string = 
+r##"import "#io" as io
 
 fun main() {
-    io.println("danda")
+    io.println(50)
 }"##;
 
         let tokens = parser.lexer.lex_utf8(test_string);
         println!("{:?}", tokens.as_ref().unwrap());
         let ast = parser.parse(&tokens.unwrap(), test_string);
+
+        let str = serde_json::to_string(&parser).unwrap();
+        let mut file = std::fs::File::create("ruda_grammar.json").unwrap();
+        file.write_all(str.as_bytes()).unwrap();
 
         panic!("{:#?}", ast.unwrap());
     }
