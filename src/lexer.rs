@@ -195,11 +195,13 @@ impl Lexer {
 
             // Match text until next whitespace/token/eof
             let mut j = 0;
+            let mut token_len = 0;
             'word: while i + j < len {
                 if chars[i + j].1.is_whitespace() {
                     break;
                 }
-                j += chars[i + j].1.len_utf8();
+                token_len += chars[i + j].1.len_utf8();
+                j += 1;
                 for token_kind in &self.token_kinds {
                     let start = i + j;
                     let tok_len = token_kind.chars().count();
@@ -216,7 +218,7 @@ impl Lexer {
             }
             tokens.push(Token {
                 index: chars[i].0,
-                len: j,
+                len: token_len,
                 location: TextLocation::new(line, column),
                 kind: TokenKinds::Text,
             });

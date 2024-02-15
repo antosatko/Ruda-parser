@@ -595,6 +595,7 @@ impl Parser {
                     }
                     #[cfg(feature = "debug")]
                     println!("WHILE DONE, CURSOR.TO_ADVANCE = {}", cursor.to_advance);
+                    #[cfg(feature = "debug")]
                     println!("\t - WHILE DONE, CURSOR.IDX = {}", cursor.idx);
                 }
                 grammar::Rule::Until {

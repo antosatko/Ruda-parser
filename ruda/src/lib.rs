@@ -1,10 +1,8 @@
 extern crate alloc;
-use alloc::vec;
 use alloc::string::*;
+use alloc::vec;
 
 type Map = std::collections::HashMap<String, VariableKind>;
-
-
 
 use rparse::grammar;
 use rparse::{grammar::*, lexer::*, Parser};
@@ -49,20 +47,20 @@ pub fn gen_parser() -> Parser {
     ];
     parser.lexer.add_tokens(&tokens);
 
-    let preprocessor: Preprocessor = |text, tokens| {
+    let preprocessor: Preprocessor = |text_, tokens| {
         let mut new_tokens = vec![];
         let mut i = 0;
         'main: while i < tokens.len() {
             let token = &tokens[i];
             match &token.kind {
                 TokenKinds::Text => {
-                    let text = &text[token.index..token.index + token.len];
+                    let text = &text_[token.index..token.index + token.len];
 
                     // test for number
                     // strip suffix character (u, i, f, etc.)
                     let c = text.chars().last().unwrap();
                     let text1 = if c.is_alphabetic() {
-                        &text[..text.len() - 1]
+                        &text[..text.len() - text.chars().last().unwrap().len_utf8()]
                     } else {
                         text
                     };
@@ -92,12 +90,12 @@ pub fn gen_parser() -> Parser {
                             match tokens[i + 2].kind {
                                 TokenKinds::Text => {
                                     let token = &tokens[i + 2];
-                                    let text = &text[token.index..token.index + token.len];
+                                    let text = &text_[token.index..token.index + token.len];
                                     match text.parse::<u64>() {
                                         Ok(_) => {
                                             // it's a float with a decimal value
                                             new_tokens.push(Token {
-                                                index: token.index,
+                                                index: tokens[i].index,
                                                 len: tokens[i].len
                                                     + tokens[i + 1].len
                                                     + tokens[i + 2].len,
@@ -281,30 +279,34 @@ pub fn gen_parser() -> Parser {
     variables.insert("list".to_string(), grammar::VariableKind::NodeList);
     let entry = Node {
         name: "entry".to_string(),
-        rules: vec![Rule::Loop {
-            rules: vec![Rule::MaybeOneOf {
-                is_one_of: vec![
-                    OneOf {
-                        token: MatchToken::Node("KWImport".to_string()),
-                        rules: vec![],
-                        parameters: vec![Parameters::Set("list".to_string())],
-                    },
-                    OneOf {
-                        token: MatchToken::Node("KWFunction".to_string()),
-                        rules: vec![],
-                        parameters: vec![Parameters::Set("list".to_string())],
-                    },
-                ],
-                isnt: vec![
-                    Rule::Command { command: Commands::Goto { label: "end".to_string() } }
-                ],
-            }],
-        },
-        Rule::Command {
-            command: Commands::Label {
-                name: "end".to_string(),
+        rules: vec![
+            Rule::Loop {
+                rules: vec![Rule::MaybeOneOf {
+                    is_one_of: vec![
+                        OneOf {
+                            token: MatchToken::Node("KWImport".to_string()),
+                            rules: vec![],
+                            parameters: vec![Parameters::Set("list".to_string())],
+                        },
+                        OneOf {
+                            token: MatchToken::Node("KWFunction".to_string()),
+                            rules: vec![],
+                            parameters: vec![Parameters::Set("list".to_string())],
+                        },
+                    ],
+                    isnt: vec![Rule::Command {
+                        command: Commands::Goto {
+                            label: "end".to_string(),
+                        },
+                    }],
+                }],
             },
-        },],
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end".to_string(),
+                },
+            },
+        ],
         variables,
     };
     parser.grammar.nodes.insert(entry.name.clone(), entry);
@@ -652,7 +654,7 @@ pub fn gen_parser() -> Parser {
     parser.grammar.nodes.insert(index.name.clone(), index);
 
     let mut variables = Map::new();
-    variables.insert("arguments".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("arguments".to_string(), grammar::VariableKind::Node);
     let call = Node {
         name: "call".to_string(),
         rules: vec![
@@ -661,23 +663,9 @@ pub fn gen_parser() -> Parser {
                 rules: vec![],
                 parameters: vec![Parameters::HardError(true)],
             },
-            Rule::Command {
-                command: Commands::Print {
-                    message: "jsem v call zas a znova".to_string(),
-                },
-            },
-            Rule::Maybe {
-                token: MatchToken::Node("expression".to_string()),
-                is: vec![Rule::While {
-                    token: MatchToken::Token(TokenKinds::Token(",".to_string())),
-                    rules: vec![Rule::Is {
-                        token: MatchToken::Node("expression".to_string()),
-                        rules: vec![],
-                        parameters: vec![Parameters::Set("arguments".to_string())],
-                    }],
-                    parameters: vec![],
-                }],
-                isnt: vec![],
+            Rule::Is {
+                token: MatchToken::Node("values_list".to_string()),
+                rules: vec![],
                 parameters: vec![Parameters::Set("arguments".to_string())],
             },
             Rule::Is {
@@ -690,6 +678,36 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(call.name.clone(), call);
 
+    let mut variables = Map::new();
+    variables.insert("values".to_string(), grammar::VariableKind::NodeList);
+    let values_list = Node {
+        name: "values_list".to_string(),
+        rules: vec![Rule::Maybe {
+            token: MatchToken::Node("expression".to_string()),
+            is: vec![Rule::While {
+                token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                rules: vec![Rule::Maybe {
+                    token: MatchToken::Node("expression".to_string()),
+                    is: vec![],
+                    isnt: vec![
+                        Rule::Command {
+                            command: Commands::Goto {
+                                label: "end".to_string(),
+                            },
+                        },
+                    ],
+                    parameters: vec![Parameters::Set("values".to_string())],
+                }],
+                parameters: vec![Parameters::Set("values".to_string())],
+            }],
+            isnt: vec![],
+            parameters: vec![Parameters::Set("values".to_string())],
+        },
+        Rule::Command { command: Commands::Label { name: "end".to_string() } }],
+        variables,
+    };
+    parser.grammar.nodes.insert(values_list.name.clone(), values_list);
+
     parser
 }
 
@@ -701,6 +719,7 @@ mod tests {
 
     #[test]
     fn it_works() {
+        let start = std::time::Instant::now();
         let parser = gen_parser();
 
         let validation = parser.grammar.validate(&parser.lexer);
@@ -715,22 +734,34 @@ mod tests {
 
         assert!(validation.pass(), "Grammar is not valid"); // change .pass() to .success() for production
 
-        let test_string = 
-r##"
+        println!("Parser generation took: {:?}", start.elapsed());
+        let start = std::time::Instant::now();
+
+        let test_string = r##"
 import "#io"
 
 fun main() {
-    io.println("Hello, World!") sdfg.d
+    io.přiňtLnffž("Hello, World!", 600., ) sdfg.d
 }"##;
 
-        let tokens = parser.lexer.lex_utf8(test_string);
-        println!("{:?}", tokens.as_ref().unwrap());
-        let ast = parser.parse(&tokens.unwrap(), test_string);
+        let tokens = parser.lexer.lex_utf8(test_string).unwrap();
 
+        for token in &tokens {
+            println!("{}", test_string[token.index..token.index + token.len].to_string());
+        }
+
+        
+        println!("Lexer took: {:?}", start.elapsed());
+        let start = std::time::Instant::now();
+        
+        //println!("{:?}", tokens.as_ref().unwrap());
+        let ast = parser.parse(&tokens, test_string);
+        println!("Parser took: {:?}", start.elapsed());
+        
         let str = serde_json::to_string(&parser).unwrap();
         let mut file = std::fs::File::create("ruda_grammar.json").unwrap();
-        file.write_all(str.as_bytes()).unwrap();
-
+        //file.write_all(str.as_bytes()).unwrap();
+        
         panic!("{:#?}", ast.unwrap());
     }
 }
