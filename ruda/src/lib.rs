@@ -18,6 +18,7 @@ pub fn gen_parser() -> Parser {
         "+".to_string(),
         "-".to_string(),
         "*".to_string(),
+        "//".to_string(),
         "/".to_string(),
         "(".to_string(),
         ")".to_string(),
@@ -159,6 +160,43 @@ pub fn gen_parser() -> Parser {
                             location: token.location.clone(),
                             len: current.index - token.index + current.len,
                         })?;
+                    }
+                    "//" => {
+                        i += 1;
+                        // first check if it's a doc comment
+                        if tokens[i].kind == TokenKinds::Token("/".to_string()) {
+                            i += 1;
+                            let start = i;
+                            loop {
+                                match &tokens[i].kind {
+                                    TokenKinds::Control(_) => {
+                                        i += 1;
+                                        let doc_comment = Token {
+                                            index: tokens[start].index,
+                                            len: tokens[i - 1].index + tokens[i - 1].len
+                                                - tokens[start].index,
+                                            location: tokens[start].location.clone(),
+                                            kind: TokenKinds::Complex("doc_comment".to_string()),
+                                        };
+                                        new_tokens.push(doc_comment);
+                                        continue 'main;
+                                    }
+                                    _ => (),
+                                }
+                                i += 1;
+                            }
+                        }
+                        // it's a normal comment
+                        loop {
+                            match &tokens[i].kind {
+                                TokenKinds::Control(_) => {
+                                    i += 1;
+                                    continue 'main;
+                                }
+                                _ => (),
+                            }
+                            i += 1;
+                        }
                     }
                     _ => {
                         new_tokens.push(token.clone());
@@ -322,7 +360,10 @@ pub fn gen_parser() -> Parser {
                 rules: vec![Rule::Is {
                     token: MatchToken::Token(TokenKinds::Complex("string".to_string())),
                     rules: vec![],
-                    parameters: vec![Parameters::Set("file".to_string())],
+                    parameters: vec![
+                        Parameters::Set("file".to_string()),
+                        Parameters::Global("imports".to_string()),
+                    ],
                 }],
                 parameters: vec![Parameters::HardError(true)],
             },
@@ -346,9 +387,15 @@ pub fn gen_parser() -> Parser {
     variables.insert("parameters".to_string(), grammar::VariableKind::NodeList);
     variables.insert("return_type".to_string(), grammar::VariableKind::Node);
     variables.insert("body".to_string(), grammar::VariableKind::Node);
+    variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
     let function = Node {
         name: "KWFunction".to_string(),
         rules: vec![
+            Rule::While {
+                token: MatchToken::Token(TokenKinds::Complex("doc_comment".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::Set("docs".to_string())],
+            },
             Rule::Is {
                 token: MatchToken::Word("fun".to_string()),
                 rules: vec![],
@@ -682,31 +729,44 @@ pub fn gen_parser() -> Parser {
     variables.insert("values".to_string(), grammar::VariableKind::NodeList);
     let values_list = Node {
         name: "values_list".to_string(),
-        rules: vec![Rule::Maybe {
-            token: MatchToken::Node("expression".to_string()),
-            is: vec![Rule::While {
-                token: MatchToken::Token(TokenKinds::Token(",".to_string())),
-                rules: vec![Rule::Maybe {
-                    token: MatchToken::Node("expression".to_string()),
-                    is: vec![],
-                    isnt: vec![
-                        Rule::Command {
+        rules: vec![
+            Rule::Maybe {
+                token: MatchToken::Node("expression".to_string()),
+                is: vec![Rule::While {
+                    token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                    rules: vec![Rule::Maybe {
+                        token: MatchToken::Node("expression".to_string()),
+                        is: vec![],
+                        isnt: vec![Rule::Command {
                             command: Commands::Goto {
                                 label: "end".to_string(),
                             },
-                        },
-                    ],
+                        }],
+                        parameters: vec![Parameters::Set("values".to_string())],
+                    }],
                     parameters: vec![Parameters::Set("values".to_string())],
                 }],
+                isnt: vec![],
                 parameters: vec![Parameters::Set("values".to_string())],
-            }],
-            isnt: vec![],
-            parameters: vec![Parameters::Set("values".to_string())],
-        },
-        Rule::Command { command: Commands::Label { name: "end".to_string() } }],
+            },
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end".to_string(),
+                },
+            },
+        ],
         variables,
     };
-    parser.grammar.nodes.insert(values_list.name.clone(), values_list);
+    parser
+        .grammar
+        .nodes
+        .insert(values_list.name.clone(), values_list);
+
+    // keeps track of all the imported files for faster lookup
+    parser
+        .grammar
+        .globals
+        .insert("imports".to_string(), VariableKind::NodeList);
 
     parser
 }
@@ -740,6 +800,8 @@ mod tests {
         let test_string = r##"
 import "#io"
 
+/// danda Římani
+/// utf8 je zlo na této planetě
 fun main() {
     io.přiňtLnffž("Hello, World!", 600., ) sdfg.d
 }"##;
@@ -747,21 +809,23 @@ fun main() {
         let tokens = parser.lexer.lex_utf8(test_string).unwrap();
 
         for token in &tokens {
-            println!("{}", test_string[token.index..token.index + token.len].to_string());
+            println!(
+                "{}",
+                test_string[token.index..token.index + token.len].to_string()
+            );
         }
 
-        
         println!("Lexer took: {:?}", start.elapsed());
         let start = std::time::Instant::now();
-        
+
         //println!("{:?}", tokens.as_ref().unwrap());
         let ast = parser.parse(&tokens, test_string);
         println!("Parser took: {:?}", start.elapsed());
-        
+
         let str = serde_json::to_string(&parser).unwrap();
         let mut file = std::fs::File::create("ruda_grammar.json").unwrap();
         //file.write_all(str.as_bytes()).unwrap();
-        
+
         panic!("{:#?}", ast.unwrap());
     }
 }
