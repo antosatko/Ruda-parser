@@ -720,7 +720,7 @@ r##"
 import "#io"
 
 fun main() {
-    io.println("Hello, World!")
+    io.println("Hello, World!") sdfg.
 }"##;
 
         let tokens = parser.lexer.lex_utf8(test_string);

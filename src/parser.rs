@@ -229,6 +229,7 @@ impl Parser {
                         text,
                     )? {
                         TokenCompare::Is(val) => {
+                            let is_token = val.is_token();
                             self.parse_parameters(
                                 grammar,
                                 lexer,
@@ -237,12 +238,14 @@ impl Parser {
                                 globals,
                                 cursor_clone,
                                 node,
-                                val,
+                                &val,
                                 &mut msg_bus,
                                 tokens,
                                 text,
                             )?;
-                            cursor.to_advance = true;
+                            if is_token {
+                                cursor.to_advance = true;
+                            }
                             self.parse_rules(
                                 grammar,
                                 lexer,
@@ -326,6 +329,7 @@ impl Parser {
                                 #[cfg(feature = "debug")]
                                 println!("success");
                                 found = true;
+                                let is_token = val.is_token();
                                 self.parse_parameters(
                                     grammar,
                                     lexer,
@@ -334,12 +338,14 @@ impl Parser {
                                     globals,
                                     cursor_clone,
                                     node,
-                                    val,
+                                    &val,
                                     &mut msg_bus,
                                     tokens,
                                     text,
                                 )?;
-                                cursor.to_advance = true;
+                                if is_token {
+                                    cursor.to_advance = true;
+                                }
                                 self.parse_rules(
                                     grammar,
                                     lexer,
@@ -400,6 +406,7 @@ impl Parser {
                         text,
                     )? {
                         Is(val) => {
+                            let is_token = val.is_token();
                             self.parse_parameters(
                                 grammar,
                                 lexer,
@@ -408,12 +415,14 @@ impl Parser {
                                 globals,
                                 cursor_clone,
                                 node,
-                                val,
+                                &val,
                                 &mut msg_bus,
                                 tokens,
                                 text,
                             )?;
-                            cursor.to_advance = true;
+                            if is_token {
+                                cursor.to_advance = true;
+                            }
                             self.parse_rules(
                                 grammar,
                                 lexer,
@@ -481,7 +490,7 @@ impl Parser {
                                     globals,
                                     cursor_clone,
                                     node,
-                                    val,
+                                    &val,
                                     &mut msg_bus,
                                     tokens,
                                     text,
@@ -544,6 +553,7 @@ impl Parser {
                         text,
                     )? {
                         TokenCompare::Is(val) => {
+                            let is_token = val.is_token();
                             self.parse_parameters(
                                 grammar,
                                 lexer,
@@ -552,12 +562,14 @@ impl Parser {
                                 globals,
                                 cursor_clone,
                                 node,
-                                val,
+                                &val,
                                 &mut msg_bus,
                                 tokens,
                                 text,
                             )?;
-                            cursor.to_advance = true;
+                            if is_token {
+                                cursor.to_advance = true;
+                            }
                             self.parse_rules(
                                 grammar,
                                 lexer,
@@ -582,7 +594,8 @@ impl Parser {
                         },
                     }
                     #[cfg(feature = "debug")]
-                    println!("WHILE DONE, CURSOR.TO_ADVANCE = {}", cursor.to_advance)
+                    println!("WHILE DONE, CURSOR.TO_ADVANCE = {}", cursor.to_advance);
+                    println!("\t - WHILE DONE, CURSOR.IDX = {}", cursor.idx);
                 }
                 grammar::Rule::Until {
                     token,
@@ -618,7 +631,7 @@ impl Parser {
                         globals,
                         cursor_clone,
                         node,
-                        Nodes::Token(tokens[cursor.idx].clone()),
+                        &Nodes::Token(tokens[cursor.idx].clone()),
                         &mut msg_bus,
                         tokens,
                         text,
@@ -800,6 +813,7 @@ impl Parser {
                             )? {
                                 Is(val) => {
                                     found = true;
+                                    let is_token = val.is_token();
                                     self.parse_parameters(
                                         grammar,
                                         lexer,
@@ -808,12 +822,14 @@ impl Parser {
                                         globals,
                                         cursor_clone,
                                         node,
-                                        val,
+                                        &val,
                                         &mut msg_bus,
                                         tokens,
                                         text,
                                     )?;
-                                    cursor.to_advance = true;
+                                    if is_token {
+                                        cursor.to_advance = true;
+                                    }
                                     self.parse_rules(
                                         grammar,
                                         lexer,
@@ -1063,7 +1079,7 @@ impl Parser {
         globals: &mut Map<String, VariableKind>,
         _cursor_clone: &Cursor,
         node: &mut Node,
-        value: Nodes,
+        value: &Nodes,
         bus: &mut MsgBus,
         tokens: &Vec<Token>,
         text: &str,
