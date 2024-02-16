@@ -306,6 +306,8 @@ pub fn gen_parser() -> Parser {
             MatchToken::Token(TokenKinds::Complex("string".to_string())),
             MatchToken::Token(TokenKinds::Complex("char".to_string())),
             MatchToken::Enumerator("numbers".to_string()),
+            MatchToken::Node("array".to_string()),
+            MatchToken::Node("tuple".to_string()),
         ],
     };
     parser
@@ -314,40 +316,98 @@ pub fn gen_parser() -> Parser {
         .insert(literals.name.clone(), literals);
 
     let mut variables = Map::new();
-    variables.insert("list".to_string(), grammar::VariableKind::NodeList);
-    let entry = Node {
-        name: "entry".to_string(),
+    variables.insert("body".to_string(), grammar::VariableKind::Node);
+    let array = Node {
+        name: "array".to_string(),
         rules: vec![
-            Rule::Loop {
-                rules: vec![Rule::MaybeOneOf {
-                    is_one_of: vec![
-                        OneOf {
-                            token: MatchToken::Node("KWImport".to_string()),
-                            rules: vec![],
-                            parameters: vec![Parameters::Set("list".to_string())],
-                        },
-                        OneOf {
-                            token: MatchToken::Node("KWFunction".to_string()),
-                            rules: vec![],
-                            parameters: vec![Parameters::Set("list".to_string())],
-                        },
-                    ],
-                    isnt: vec![Rule::Command {
-                        command: Commands::Goto {
-                            label: "end".to_string(),
-                        },
-                    }],
-                }],
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("[".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
             },
-            Rule::Command {
-                command: Commands::Label {
-                    name: "end".to_string(),
-                },
+            Rule::Is {
+                token: MatchToken::Enumerator("array_types".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("body".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("]".to_string())),
+                rules: vec![],
+                parameters: vec![],
             },
         ],
         variables,
     };
+    parser.grammar.nodes.insert(array.name.clone(), array);
+
+    // this is work in progress
+    //
+    // this will hold many different ways to initialize an array
+    let array_types = Enumerator {
+        name: "array_types".to_string(),
+        values: vec![
+            MatchToken::Node("array_builder".to_string()),
+            MatchToken::Node("values_list".to_string()),
+        ],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(array_types.name.clone(), array_types);
+
+    let mut variables = Map::new();
+    variables.insert("value".to_string(), grammar::VariableKind::Node);
+    variables.insert("times".to_string(), grammar::VariableKind::Node);
+    let array_builder = Node {
+        name: "array_builder".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Node("expression".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("value".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(";".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Node("expression".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("times".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(array_builder.name.clone(), array_builder);
+
+    let mut variables = Map::new();
+    variables.insert("list".to_string(), grammar::VariableKind::NodeList);
+    let entry = Node {
+        name: "entry".to_string(),
+        rules: vec![Rule::While {
+            token: MatchToken::Enumerator("entry_nodes".to_string()),
+            rules: vec![],
+            parameters: vec![Parameters::Set("list".to_string())],
+        }],
+        variables,
+    };
     parser.grammar.nodes.insert(entry.name.clone(), entry);
+
+    let entry_nodes = Enumerator {
+        name: "entry_nodes".to_string(),
+        values: vec![
+            MatchToken::Node("KWImport".to_string()),
+            MatchToken::Node("KWFunction".to_string()),
+        ],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(entry_nodes.name.clone(), entry_nodes);
 
     let mut variables = Map::new();
     variables.insert("file".to_string(), grammar::VariableKind::Node);
@@ -388,6 +448,7 @@ pub fn gen_parser() -> Parser {
     variables.insert("return_type".to_string(), grammar::VariableKind::Node);
     variables.insert("body".to_string(), grammar::VariableKind::Node);
     variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("public".to_string(), grammar::VariableKind::Boolean);
     let function = Node {
         name: "KWFunction".to_string(),
         rules: vec![
@@ -395,6 +456,12 @@ pub fn gen_parser() -> Parser {
                 token: MatchToken::Token(TokenKinds::Complex("doc_comment".to_string())),
                 rules: vec![],
                 parameters: vec![Parameters::Set("docs".to_string())],
+            },
+            Rule::Maybe {
+                token: MatchToken::Word("pub".to_string()),
+                is: vec![],
+                isnt: vec![],
+                parameters: vec![Parameters::True("public".to_string())],
             },
             Rule::Is {
                 token: MatchToken::Word("fun".to_string()),
@@ -433,7 +500,7 @@ pub fn gen_parser() -> Parser {
             Rule::Maybe {
                 token: MatchToken::Token(TokenKinds::Token(":".to_string())),
                 is: vec![Rule::Is {
-                    token: MatchToken::Node("type".to_string()),
+                    token: MatchToken::Enumerator("types".to_string()),
                     rules: vec![],
                     parameters: vec![Parameters::Set("return_type".to_string())],
                 }],
@@ -477,7 +544,7 @@ pub fn gen_parser() -> Parser {
 
     let block_line = Enumerator {
         name: "block_line".to_string(),
-        values: vec![MatchToken::Node("expression".to_string())],
+        values: vec![MatchToken::Node("statement".to_string())],
     };
     parser
         .grammar
@@ -487,13 +554,27 @@ pub fn gen_parser() -> Parser {
     let mut variables = Map::new();
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
     variables.insert("type".to_string(), grammar::VariableKind::Node);
+    variables.insert("rest".to_string(), grammar::VariableKind::Boolean);
     let type_specifier = Node {
         name: "parameter".to_string(),
         rules: vec![
+            Rule::Maybe {
+                token: MatchToken::Token(TokenKinds::Token(".".to_string())),
+                is: vec![Rule::Is {
+                    token: MatchToken::Token(TokenKinds::Token(".".to_string())),
+                    rules: vec![],
+                    parameters: vec![Parameters::True("rest".to_string())],
+                }],
+                isnt: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Text),
                 rules: vec![],
-                parameters: vec![Parameters::Set("identifier".to_string())],
+                parameters: vec![
+                    Parameters::Set("identifier".to_string()),
+                    Parameters::HardError(true),
+                ],
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token(":".to_string())),
@@ -501,7 +582,7 @@ pub fn gen_parser() -> Parser {
                 parameters: vec![],
             },
             Rule::Is {
-                token: MatchToken::Node("type".to_string()),
+                token: MatchToken::Enumerator("types".to_string()),
                 rules: vec![],
                 parameters: vec![Parameters::Set("type".to_string())],
             },
@@ -519,10 +600,34 @@ pub fn gen_parser() -> Parser {
     let type_ = Node {
         name: "type".to_string(),
         rules: vec![
-            Rule::While {
-                token: MatchToken::Token(TokenKinds::Token("&".to_string())),
-                rules: vec![],
-                parameters: vec![Parameters::Increment("refs".to_string())],
+            Rule::Loop {
+                rules: vec![Rule::MaybeOneOf {
+                    is_one_of: vec![
+                        OneOf {
+                            token: MatchToken::Token(TokenKinds::Token("&".to_string())),
+                            rules: vec![],
+                            parameters: vec![Parameters::Increment("refs".to_string())],
+                        },
+                        OneOf {
+                            token: MatchToken::Token(TokenKinds::Token("&&".to_string())),
+                            rules: vec![],
+                            parameters: vec![
+                                Parameters::Increment("refs".to_string()),
+                                Parameters::Increment("refs".to_string()),
+                            ],
+                        },
+                    ],
+                    isnt: vec![Rule::Command {
+                        command: Commands::Goto {
+                            label: "end_refs".to_string(),
+                        },
+                    }],
+                }],
+            },
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end_refs".to_string(),
+                },
             },
             Rule::Is {
                 token: MatchToken::Node("path".to_string()),
@@ -533,6 +638,163 @@ pub fn gen_parser() -> Parser {
         variables,
     };
     parser.grammar.nodes.insert(type_.name.clone(), type_);
+
+    let mut variables = Map::new();
+    variables.insert("refs".to_string(), grammar::VariableKind::Number);
+    variables.insert("type".to_string(), grammar::VariableKind::Node);
+    let array_type = Node {
+        name: "array_type".to_string(),
+        rules: vec![
+            Rule::Loop {
+                rules: vec![Rule::MaybeOneOf {
+                    is_one_of: vec![
+                        OneOf {
+                            token: MatchToken::Token(TokenKinds::Token("&".to_string())),
+                            rules: vec![],
+                            parameters: vec![Parameters::Increment("refs".to_string())],
+                        },
+                        OneOf {
+                            token: MatchToken::Token(TokenKinds::Token("&&".to_string())),
+                            rules: vec![],
+                            parameters: vec![
+                                Parameters::Increment("refs".to_string()),
+                                Parameters::Increment("refs".to_string()),
+                            ],
+                        },
+                    ],
+                    isnt: vec![Rule::Command {
+                        command: Commands::Goto {
+                            label: "end_refs".to_string(),
+                        },
+                    }],
+                }],
+            },
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end_refs".to_string(),
+                },
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("[".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Node("type".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("type".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("]".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(array_type.name.clone(), array_type);
+
+    let mut variables = Map::new();
+    variables.insert("refs".to_string(), grammar::VariableKind::Number);
+    variables.insert("types".to_string(), grammar::VariableKind::Node);
+    let tuple_type = Node {
+        name: "tuple_type".to_string(),
+        rules: vec![
+            Rule::Loop {
+                rules: vec![Rule::MaybeOneOf {
+                    is_one_of: vec![
+                        OneOf {
+                            token: MatchToken::Token(TokenKinds::Token("&".to_string())),
+                            rules: vec![],
+                            parameters: vec![Parameters::Increment("refs".to_string())],
+                        },
+                        OneOf {
+                            token: MatchToken::Token(TokenKinds::Token("&&".to_string())),
+                            rules: vec![],
+                            parameters: vec![
+                                Parameters::Increment("refs".to_string()),
+                                Parameters::Increment("refs".to_string()),
+                            ],
+                        },
+                    ],
+                    isnt: vec![Rule::Command {
+                        command: Commands::Goto {
+                            label: "end_refs".to_string(),
+                        },
+                    }],
+                }],
+            },
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end_refs".to_string(),
+                },
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("(".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Enumerator("types".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("types".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(")".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(tuple_type.name.clone(), tuple_type);
+
+    let mut variables = Map::new();
+    variables.insert("types".to_string(), grammar::VariableKind::NodeList);
+    let type_list = Node {
+        name: "type_list".to_string(),
+        rules: vec![Rule::Maybe {
+            token: MatchToken::Enumerator("types".to_string()),
+            is: vec![Rule::While {
+                token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                rules: vec![Rule::Is {
+                    token: MatchToken::Enumerator("types".to_string()),
+                    rules: vec![],
+                    parameters: vec![Parameters::Set("types".to_string())],
+                }],
+                parameters: vec![Parameters::Set("types".to_string())],
+            }],
+            isnt: vec![],
+            parameters: vec![
+                Parameters::Set("types".to_string()),
+                Parameters::HardError(true),
+            ],
+        }],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(type_list.name.clone(), type_list);
+
+    let types_enum = Enumerator {
+        name: "types".to_string(),
+        values: vec![
+            MatchToken::Node("type".to_string()),
+            MatchToken::Node("array_type".to_string()),
+            MatchToken::Node("tuple_type".to_string()),
+        ],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(types_enum.name.clone(), types_enum);
 
     let mut variables = Map::new();
     variables.insert("path".to_string(), grammar::VariableKind::NodeList);
@@ -592,6 +854,30 @@ pub fn gen_parser() -> Parser {
         .insert(expression.name.clone(), expression);
 
     let mut variables = Map::new();
+    variables.insert("expression".to_string(), grammar::VariableKind::Node);
+    // just a wrapper over expression with a semicolon
+    let statement = Node {
+        name: "statement".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Node("expression".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("expression".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(";".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(statement.name.clone(), statement);
+
+    let mut variables = Map::new();
     variables.insert("unaries".to_string(), grammar::VariableKind::NodeList);
     variables.insert("path".to_string(), grammar::VariableKind::Node);
     variables.insert("tail".to_string(), grammar::VariableKind::Node);
@@ -641,12 +927,94 @@ pub fn gen_parser() -> Parser {
             MatchToken::Node("field".to_string()),
             MatchToken::Node("index".to_string()),
             MatchToken::Node("call".to_string()),
+            MatchToken::Node("instance".to_string()),
         ],
     };
     parser
         .grammar
         .enumerators
         .insert(tail_options.name.clone(), tail_options);
+
+    let mut variables = Map::new();
+    variables.insert("fields".to_string(), grammar::VariableKind::NodeList);
+    let instance = Node {
+        name: "instance".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(":".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("{".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+            Rule::Maybe {
+                token: MatchToken::Node("instance_field".to_string()),
+                is: vec![Rule::While {
+                    token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                    rules: vec![Rule::Maybe {
+                        token: MatchToken::Node("instance_field".to_string()),
+                        is: vec![],
+                        isnt: vec![Rule::Command {
+                            command: Commands::Goto {
+                                label: "end".to_string(),
+                            },
+                        }],
+                        parameters: vec![Parameters::Set("fields".to_string())],
+                    }],
+                    parameters: vec![],
+                }],
+                isnt: vec![],
+                parameters: vec![Parameters::Set("fields".to_string())],
+            },
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end".to_string(),
+                },
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("}".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(instance.name.clone(), instance);
+
+    let mut variables = Map::new();
+    variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("expression".to_string(), grammar::VariableKind::Node);
+    let instance_field = Node {
+        name: "instance_field".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![
+                    Parameters::Set("identifier".to_string()),
+                    Parameters::HardError(true),
+                ],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(":".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+            Rule::Is {
+                token: MatchToken::Node("expression".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("expression".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(instance_field.name.clone(), instance_field);
 
     let mut variables = Map::new();
     variables.insert("field".to_string(), grammar::VariableKind::Node);
@@ -744,10 +1112,13 @@ pub fn gen_parser() -> Parser {
                         }],
                         parameters: vec![Parameters::Set("values".to_string())],
                     }],
-                    parameters: vec![Parameters::Set("values".to_string())],
+                    parameters: vec![],
                 }],
                 isnt: vec![],
-                parameters: vec![Parameters::Set("values".to_string())],
+                parameters: vec![
+                    Parameters::Set("values".to_string()),
+                    Parameters::HardError(true),
+                ],
             },
             Rule::Command {
                 command: Commands::Label {
@@ -802,9 +1173,19 @@ import "#io"
 
 /// danda Římani
 /// utf8 je zlo na této planetě
-fun main() {
-    io.přiňtLnffž("Hello, World!", 600., ) sdfg.d
-}"##;
+pub fun main() {
+    io.přiňtLnffž("Hello, World!", 600. + 9, Danda:{
+        a: !!!!!!!!!!!!!!!!!!!!!!!!!!!!5c,
+        b: 6f,
+        c: [10, 20, 30,],
+    },);
+}
+
+fun sum_args(..numbers: int): int {}
+
+fun sum_array(numbers: &[&&&int]): int {}
+
+"##;
 
         let tokens = parser.lexer.lex_utf8(test_string).unwrap();
 

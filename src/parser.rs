@@ -205,9 +205,10 @@ impl Parser {
             }
             #[cfg(feature = "debug")]
             println!(
-                "tok: <{}> kind: {:?}",
+                "tok: <{}> kind: {:?} -- parent: {}",
                 lexer.stringify(&tokens[cursor.idx], text),
-                tokens[cursor.idx].kind
+                tokens[cursor.idx].kind,
+                node.name
             );
             #[cfg(feature = "debug")]
             println!("rule: {:?}", rule);
@@ -495,6 +496,8 @@ impl Parser {
                                     tokens,
                                     text,
                                 )?;
+                                #[cfg(feature = "debug")]
+                                println!("is_token: {}", is_token);
                                 if is_token {
                                     cursor.to_advance = true;
                                 }
