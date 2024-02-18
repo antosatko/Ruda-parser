@@ -549,6 +549,9 @@ pub fn gen_parser() -> Parser {
             MatchToken::Node("KWImport".to_string()),
             MatchToken::Node("KWLet".to_string()),
             MatchToken::Node("KWIf".to_string()),
+            MatchToken::Node("KWWhile".to_string()),
+            MatchToken::Node("KWFor".to_string()),
+            MatchToken::Node("KWLoop".to_string()),
             MatchToken::Node("statement".to_string()),
             MatchToken::Token(TokenKinds::Token(";".to_string())),
         ],
@@ -576,7 +579,7 @@ pub fn gen_parser() -> Parser {
                 parameters: vec![Parameters::HardError(true)],
             },
             Rule::Is {
-                token: MatchToken::Token(TokenKinds::Text),
+                token: MatchToken::Enumerator("parameter_idents".to_string()),
                 rules: vec![],
                 parameters: vec![
                     Parameters::Set("identifier".to_string()),
@@ -706,7 +709,7 @@ pub fn gen_parser() -> Parser {
 
     let mut variables = Map::new();
     variables.insert("refs".to_string(), grammar::VariableKind::Number);
-    variables.insert("types".to_string(), grammar::VariableKind::Node);
+    variables.insert("types".to_string(), grammar::VariableKind::NodeList);
     let tuple_type = Node {
         name: "tuple_type".to_string(),
         rules: vec![
@@ -745,7 +748,7 @@ pub fn gen_parser() -> Parser {
                 parameters: vec![Parameters::HardError(true)],
             },
             Rule::Is {
-                token: MatchToken::Enumerator("types".to_string()),
+                token: MatchToken::Node("type_list".to_string()),
                 rules: vec![],
                 parameters: vec![Parameters::Set("types".to_string())],
             },
@@ -866,6 +869,7 @@ pub fn gen_parser() -> Parser {
         name: "expressions".to_string(),
         values: vec![
             MatchToken::Node("KWIf".to_string()),
+            MatchToken::Node("KWLoop".to_string()),
             MatchToken::Node("closure".to_string()),
             MatchToken::Node("expression".to_string()),
         ],
@@ -1036,7 +1040,7 @@ pub fn gen_parser() -> Parser {
                 parameters: vec![Parameters::HardError(true)],
             },
             Rule::Is {
-                token: MatchToken::Token(TokenKinds::Text),
+                token: MatchToken::Enumerator("parameter_idents".to_string()),
                 rules: vec![],
                 parameters: vec![
                     Parameters::Set("identifier".to_string()),
@@ -1050,6 +1054,72 @@ pub fn gen_parser() -> Parser {
         .grammar
         .nodes
         .insert(closure_parameter.name.clone(), closure_parameter);
+
+    // tuple parameter name
+    let mut variables = Map::new();
+    variables.insert("identifiers".to_string(), grammar::VariableKind::NodeList);
+    let tuple_parameter = Node {
+        name: "tuple_parameter".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("(".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::IsOneOf {
+                tokens: vec![
+                    OneOf {
+                        token: MatchToken::Token(TokenKinds::Text),
+                        rules: vec![Rule::While {
+                            token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                            rules: vec![Rule::Is {
+                                token: MatchToken::Enumerator("parameter_idents".to_string()),
+                                rules: vec![],
+                                parameters: vec![Parameters::Set("identifiers".to_string())],
+                            }],
+                            parameters: vec![],
+                        }],
+                        parameters: vec![Parameters::Set("identifiers".to_string())],
+                    },
+                    OneOf {
+                        token: MatchToken::Node("tuple_parameter".to_string()),
+                        rules: vec![Rule::While {
+                            token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                            rules: vec![Rule::Is {
+                                token: MatchToken::Enumerator("parameter_idents".to_string()),
+                                rules: vec![],
+                                parameters: vec![Parameters::Set("identifiers".to_string())],
+                            }],
+                            parameters: vec![],
+                        }],
+                        parameters: vec![Parameters::Set("identifiers".to_string())],
+                    },
+                ],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(")".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(tuple_parameter.name.clone(), tuple_parameter);
+
+    let parameter_idents = Enumerator {
+        name: "parameter_idents".to_string(),
+        values: vec![
+            MatchToken::Token(TokenKinds::Text),
+            MatchToken::Node("tuple_parameter".to_string()),
+        ],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(parameter_idents.name.clone(), parameter_idents);
 
     let mut variables = Map::new();
     variables.insert("parameters".to_string(), grammar::VariableKind::NodeList);
@@ -1566,6 +1636,89 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(kw_else.name.clone(), kw_else);
 
+    let mut variables = Map::new();
+    variables.insert("condition".to_string(), grammar::VariableKind::Node);
+    variables.insert("body".to_string(), grammar::VariableKind::Node);
+    let kw_while = Node {
+        name: "KWWhile".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Word("while".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Enumerator("expressions".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("condition".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Node("block".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("body".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(kw_while.name.clone(), kw_while);
+
+    let mut variables = Map::new();
+    variables.insert("body".to_string(), grammar::VariableKind::Node);
+    let kw_loop = Node {
+        name: "KWLoop".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Word("loop".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Node("block".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("body".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(kw_loop.name.clone(), kw_loop);
+
+    let mut variables = Map::new();
+    variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("expression".to_string(), grammar::VariableKind::Node);
+    variables.insert("body".to_string(), grammar::VariableKind::Node);
+    let kw_for = Node {
+        name: "KWFor".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Word("for".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Enumerator("parameter_idents".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("identifier".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Word("in".to_string()),
+                rules: vec![],
+                parameters: vec![],
+            },
+            Rule::Is {
+                token: MatchToken::Enumerator("expressions".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("expression".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Node("block".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("body".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(kw_for.name.clone(), kw_for);
+
     // keeps track of all the imported files for faster lookup
     parser
         .grammar
@@ -1606,7 +1759,7 @@ import "#io"
 
 /// danda Římani
 /// utf8 je zlo na této planetě
-pub fun main() {
+pub fun main((a, b): (int, int)) {
     io.přiňtLnffž("Hello, World!", 600. + (9, 8, "ble",), Danda:{
         a: !!!!!!!!!!!!!!!!!!!!!!!!!!!!5c,
         b: 6f,
@@ -1617,7 +1770,7 @@ pub fun main() {
         io.println();
     });
 
-    closure5times((a,..b,):{
+    closure5times((a,..b, (df,f)):{
         io.println("Hello, World!",
                     5,
                     9,
@@ -1634,7 +1787,15 @@ pub fun main() {
     } else if a {
         io.println("Hello, World!");
     } else {
-        io.println("Hello, World!");
+        for (a, idx) in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10,] {
+            io.println("Hello, World!");
+        }
+        let a = loop {
+            io.println("Hello, World!");
+        };
+        while true {
+
+        }
     };
 }
 
@@ -1664,6 +1825,6 @@ fun sum_array(numbers: &[&&&int]): int {}
         let mut file = std::fs::File::create("ruda_grammar.json").unwrap();
         file.write_all(str.as_bytes()).unwrap();
 
-        panic!("{:?}", ast.unwrap());
+        panic!("{:?}", "ast.unwrap()");
     }
 }
