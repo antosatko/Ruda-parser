@@ -483,10 +483,21 @@ pub mod validator {
                                 }),
                             },
                             None => {
-                                result.errors.push(ValidationError {
-                                    kind: ValidationErrors::GlobalNotFound(left.clone()),
-                                    node_name: node.name.clone(),
-                                });
+                                match node.variables.get(left) {
+                                    Some(var) => match var {
+                                        VariableKind::Number => (),
+                                        _ => result.errors.push(ValidationError {
+                                            kind: ValidationErrors::CantUseVariable(left.clone()),
+                                            node_name: node.name.clone(),
+                                        }),
+                                    },
+                                    None => {
+                                        result.errors.push(ValidationError {
+                                            kind: ValidationErrors::GlobalNotFound(left.clone()),
+                                            node_name: node.name.clone(),
+                                        });
+                                    }
+                                }
                             }
                         }
                         match self.globals.get(right) {
@@ -498,10 +509,21 @@ pub mod validator {
                                 }),
                             },
                             None => {
-                                result.errors.push(ValidationError {
-                                    kind: ValidationErrors::GlobalNotFound(right.clone()),
-                                    node_name: node.name.clone(),
-                                });
+                                match node.variables.get(right) {
+                                    Some(var) => match var {
+                                        VariableKind::Number => (),
+                                        _ => result.errors.push(ValidationError {
+                                            kind: ValidationErrors::CantUseVariable(right.clone()),
+                                            node_name: node.name.clone(),
+                                        }),
+                                    },
+                                    None => {
+                                        result.errors.push(ValidationError {
+                                            kind: ValidationErrors::GlobalNotFound(right.clone()),
+                                            node_name: node.name.clone(),
+                                        });
+                                    }
+                                }
                             }
                         }
                         for rule in rules {

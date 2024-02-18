@@ -171,7 +171,12 @@ impl Parser {
                     node,
                 )),
             },
-            Err(err) => Err((err, node)),
+            Err(err) => {
+                #[cfg(feature = "debug")]
+                println!("error: {:?}", err);
+                *cursor = cursor_clone;
+                Err((err, node))
+            }
         }
     }
 
@@ -1035,7 +1040,10 @@ impl Parser {
                 let token = loop {
                     if i >= enumerator.values.len() {
                         return Ok(TokenCompare::IsNot(ParseError {
-                            kind: ParseErrors::Ok,
+                            kind: ParseErrors::NoneOfTheAbove{
+                                expected: enumerator.values.iter().map(|x| x.clone()).collect(),
+                                found: tokens[cursor.idx].kind.clone(),
+                            },
                             location: tokens[cursor.idx].location.clone(),
                             node: None,
                         }));
@@ -1582,6 +1590,10 @@ pub enum ParseErrors {
     ///
     /// This behaviour can be changed by setting the `eof` field in the grammar
     MissingEof,
+    NoneOfTheAbove{
+        expected: Vec<MatchToken>,
+        found: TokenKinds,
+    },
 
     /// Control key
     Ok,
@@ -1622,6 +1634,7 @@ impl fmt::Debug for ParseErrors {
             ParseErrors::CouldNotFindToken(kind) => write!(f, "Could not find token {:?}", kind),
             ParseErrors::Ok => write!(f, "If you see this, it could be a bug in the parser"),
             ParseErrors::MissingEof => write!(f, "Could not parse to the end of the file"),
+            ParseErrors::NoneOfTheAbove{expected, found} => write!(f, "Expected one of {:?}, found {:?}", expected, found),
         }
     }
 }

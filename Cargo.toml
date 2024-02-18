@@ -1,4 +1,4 @@
-workspace = { members = ["ruda"] }
+workspace = { members = ["neruda"] }
 [package]
 name = "rparse"
 version = "0.1.0"
