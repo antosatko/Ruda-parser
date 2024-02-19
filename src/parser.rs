@@ -73,7 +73,7 @@ impl Parser {
                         node
                     } else {
                         return Err(ParseError {
-                            kind: ParseErrors::MissingEof,
+                            kind: ParseErrors::MissingEof(tokens[cursor.idx].kind.clone()),
                             location: tokens[cursor.idx].location.clone(),
                             node: Some(node),
                         });
@@ -384,9 +384,10 @@ impl Parser {
                     }
                     if !found {
                         err(
-                            ParseErrors::ExpectedOneOf(
-                                pos_tokens.iter().map(|x| x.token.clone()).collect(),
-                            ),
+                            ParseErrors::ExpectedOneOf{
+                                expected: pos_tokens.iter().map(|x| x.token.clone()).collect(),
+                                found: tokens[cursor.idx].kind.clone(),
+                            },
                             cursor,
                             cursor_clone,
                             &tokens[cursor.idx].location,
@@ -870,9 +871,10 @@ impl Parser {
                     }
                     if !found {
                         err(
-                            ParseErrors::ExpectedOneOf(
-                                match_tokens.iter().map(|x| x.token.clone()).collect(),
-                            ),
+                            ParseErrors::ExpectedOneOf{
+                                expected: match_tokens.iter().map(|x| x.token.clone()).collect(),
+                                found: tokens[cursor.idx].kind.clone(),
+                            },
                             cursor,
                             cursor_clone,
                             &tokens[cursor.idx].location,
@@ -1040,7 +1042,7 @@ impl Parser {
                 let token = loop {
                     if i >= enumerator.values.len() {
                         return Ok(TokenCompare::IsNot(ParseError {
-                            kind: ParseErrors::NoneOfTheAbove{
+                            kind: ParseErrors::ExpectedOneOf{
                                 expected: enumerator.values.iter().map(|x| x.clone()).collect(),
                                 found: tokens[cursor.idx].kind.clone(),
                             },
@@ -1085,7 +1087,7 @@ impl Parser {
     fn parse_parameters(
         &self,
         _grammar: &Grammar,
-        lexer: &Lexer,
+        _lexer: &Lexer,
         parameters: &Vec<grammar::Parameters>,
         cursor: &mut Cursor,
         globals: &mut Map<String, VariableKind>,
@@ -1094,7 +1096,7 @@ impl Parser {
         value: &Nodes,
         bus: &mut MsgBus,
         tokens: &Vec<Token>,
-        text: &str,
+        _text: &str,
     ) -> Result<(), ParseError> {
         for parameter in parameters {
             match parameter {
@@ -1583,17 +1585,16 @@ pub enum ParseErrors {
     /// Cannot break - Developer error
     CannotBreak(usize),
     /// Expected one of
-    ExpectedOneOf(Vec<MatchToken>),
+    ExpectedOneOf{
+        expected: Vec<MatchToken>,
+        found: TokenKinds,
+    },
     /// Could not find token
     CouldNotFindToken(MatchToken),
     /// This error occurers when the parser ends on different token than eof
     ///
     /// This behaviour can be changed by setting the `eof` field in the grammar
-    MissingEof,
-    NoneOfTheAbove{
-        expected: Vec<MatchToken>,
-        found: TokenKinds,
-    },
+    MissingEof(TokenKinds),
 
     /// Control key
     Ok,
@@ -1624,17 +1625,13 @@ impl fmt::Debug for ParseErrors {
             ParseErrors::LabelNotFound(name) => write!(f, "Label not found: {}", name),
             ParseErrors::CannotGoBack(steps) => write!(f, "Cannot go back {} steps", steps),
             ParseErrors::CannotBreak(n) => write!(f, "Cannot break {} more steps", n),
-            ParseErrors::ExpectedOneOf(kinds) => {
-                let mut result = String::new();
-                for kind in kinds {
-                    result.push_str(&format!("{:?}, ", kind));
-                }
-                write!(f, "Expected one of {}", result)
-            }
+            ParseErrors::ExpectedOneOf{
+                expected,
+                found,
+            } => write!(f, "Expected one of {:?}, found {:?}", expected, found),
             ParseErrors::CouldNotFindToken(kind) => write!(f, "Could not find token {:?}", kind),
             ParseErrors::Ok => write!(f, "If you see this, it could be a bug in the parser"),
-            ParseErrors::MissingEof => write!(f, "Could not parse to the end of the file"),
-            ParseErrors::NoneOfTheAbove{expected, found} => write!(f, "Expected one of {:?}, found {:?}", expected, found),
+            ParseErrors::MissingEof(found) => write!(f, "Could not parse to the end of the file - found {:?}", found),
         }
     }
 }

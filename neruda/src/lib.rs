@@ -255,7 +255,7 @@ pub fn gen_parser() -> Parser {
             MatchToken::Word("let".to_string()),
             MatchToken::Word("const".to_string()),
             MatchToken::Word("enum".to_string()),
-            MatchToken::Word("struct".to_string()),
+            MatchToken::Word("class".to_string()),
             MatchToken::Word("impl".to_string()),
             MatchToken::Word("trait".to_string()),
             MatchToken::Word("type".to_string()),
@@ -402,6 +402,8 @@ pub fn gen_parser() -> Parser {
         values: vec![
             MatchToken::Node("KWImport".to_string()),
             MatchToken::Node("KWFunction".to_string()),
+            MatchToken::Node("KWClass".to_string()),
+            MatchToken::Node("KWEnum".to_string()),
         ],
     };
     parser
@@ -551,7 +553,9 @@ pub fn gen_parser() -> Parser {
             MatchToken::Node("KWIf".to_string()),
             MatchToken::Node("KWWhile".to_string()),
             MatchToken::Node("KWFor".to_string()),
+            MatchToken::Node("KWClass".to_string()),
             MatchToken::Node("KWLoop".to_string()),
+            MatchToken::Node("KWEnum".to_string()),
             MatchToken::Node("KWReturn".to_string()),
             MatchToken::Node("KWBreak".to_string()),
             MatchToken::Node("KWContinue".to_string()),
@@ -1847,6 +1851,215 @@ pub fn gen_parser() -> Parser {
         .nodes
         .insert(loop_label.name.clone(), loop_label);
 
+    let mut variables = Map::new();
+    variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("members".to_string(), grammar::VariableKind::NodeList);
+    let kw_class = Node {
+        name: "KWClass".to_string(),
+        rules: vec![
+            Rule::While {
+                token: MatchToken::Token(TokenKinds::Complex("doc_comment".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::Set("docs".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Word("class".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![Parameters::Set("identifier".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("{".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+            Rule::While {
+                token: MatchToken::Enumerator("class_members".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("members".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("}".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(kw_class.name.clone(), kw_class);
+
+    let class_members = Enumerator {
+        name: "class_members".to_string(),
+        values: vec![
+            MatchToken::Node("class_field".to_string()),
+            MatchToken::Node("KWFunction".to_string()),
+        ],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(class_members.name.clone(), class_members);
+
+    let mut variables = Map::new();
+    variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("type".to_string(), grammar::VariableKind::Node);
+    let class_field = Node {
+        name: "class_field".to_string(),
+        rules: vec![
+            Rule::While {
+                token: MatchToken::Token(TokenKinds::Complex("doc_comment".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::Set("docs".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![Parameters::Set("identifier".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(":".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+            Rule::Is {
+                token: MatchToken::Enumerator("types".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("type".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(";".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(class_field.name.clone(), class_field);
+
+    let mut variables = Map::new();
+    variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("members".to_string(), grammar::VariableKind::NodeList);
+    let kw_enum = Node {
+        name: "KWEnum".to_string(),
+        rules: vec![
+            Rule::While {
+                token: MatchToken::Token(TokenKinds::Complex("doc_comment".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::Set("docs".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Word("enum".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![Parameters::Set("identifier".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("{".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+            Rule::While {
+                token: MatchToken::Enumerator("enum_members".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("members".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("}".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(kw_enum.name.clone(), kw_enum);
+
+    let enum_members = Enumerator {
+        name: "enum_members".to_string(),
+        values: vec![
+            MatchToken::Node("KWFunction".to_string()),
+            MatchToken::Node("enum_variant".to_string()),
+        ],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(enum_members.name.clone(), enum_members);
+
+    let mut variables = Map::new();
+    variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("value".to_string(), grammar::VariableKind::Node);
+    variables.insert("fields".to_string(), grammar::VariableKind::NodeList);
+    let enum_variant = Node {
+        name: "enum_variant".to_string(),
+        rules: vec![
+            Rule::While {
+                token: MatchToken::Token(TokenKinds::Complex("doc_comment".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::Set("docs".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![
+                    Parameters::Set("identifier".to_string()),
+                    Parameters::HardError(true),
+                ],
+            },
+            Rule::Maybe {
+                token: MatchToken::Token(TokenKinds::Token("(".to_string())),
+                is: vec![
+                    Rule::While {
+                        token: MatchToken::Node("class_field".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("fields".to_string())],
+                    },
+                    Rule::Is {
+                        token: MatchToken::Token(TokenKinds::Token(")".to_string())),
+                        rules: vec![],
+                        parameters: vec![],
+                    },
+                ],
+                isnt: vec![],
+                parameters: vec![],
+            },
+            Rule::Maybe {
+                token: MatchToken::Token(TokenKinds::Token("=".to_string())),
+                is: vec![Rule::Is {
+                    token: MatchToken::Enumerator("expressions".to_string()),
+                    rules: vec![],
+                    parameters: vec![Parameters::Set("value".to_string())],
+                }],
+                isnt: vec![],
+                parameters: vec![],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(";".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(enum_variant.name.clone(), enum_variant);
+
     // keeps track of all the imported files for faster lookup
     parser
         .grammar
@@ -1931,6 +2144,39 @@ pub fun main((a, b): (int, int)) {
 fun sum_args(..numbers: int): int {}
 
 fun sum_array(numbers: &[&&&int]): int {}
+
+
+/// Tahleta třída je pro testování
+/// 
+/// Ať tě ani nenapadne ji použít
+class Danda {
+    a: int;
+    b: int;
+    c: int;
+    fun sum(a: int, b: char): int {
+        a + b + 5c;
+    }
+}
+
+enum A {
+    a; // = 0
+    b = 7;
+    c(
+        /// První parametr
+        first: int;
+        second: &(int, float);
+    ) = 5;
+
+    fun new() {
+        let option1 = A.c(5, (5, 5.5));
+        let option2 = A.c:{
+            first: 5,
+            second: (5, 5.5),
+        };
+        return option1;
+    }
+}
+
 
 "##;
 
