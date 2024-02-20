@@ -244,29 +244,32 @@ pub fn gen_parser() -> Parser {
     let keywords = Enumerator {
         name: "keywords".to_string(),
         values: vec![
+            // done:
             MatchToken::Word("if".to_string()),
             MatchToken::Word("else".to_string()),
             MatchToken::Word("while".to_string()),
+            MatchToken::Word("use".to_string()),
             MatchToken::Word("for".to_string()),
             MatchToken::Word("return".to_string()),
             MatchToken::Word("break".to_string()),
             MatchToken::Word("continue".to_string()),
             MatchToken::Word("fun".to_string()),
             MatchToken::Word("let".to_string()),
-            MatchToken::Word("const".to_string()),
             MatchToken::Word("enum".to_string()),
             MatchToken::Word("class".to_string()),
+            // todo:
             MatchToken::Word("impl".to_string()),
+            MatchToken::Word("const".to_string()),
             MatchToken::Word("trait".to_string()),
             MatchToken::Word("type".to_string()),
-            MatchToken::Word("use".to_string()),
             MatchToken::Word("as".to_string()),
-            MatchToken::Word("error".to_string()),
-            MatchToken::Word("yeet".to_string()),
             MatchToken::Word("delete".to_string()),
             MatchToken::Word("switch".to_string()),
             MatchToken::Word("new".to_string()),
+            // in consideration:
+            MatchToken::Word("error".to_string()),
             MatchToken::Word("try".to_string()),
+            MatchToken::Word("yeet".to_string()),
             MatchToken::Word("catch".to_string()),
         ],
     };
@@ -403,6 +406,7 @@ pub fn gen_parser() -> Parser {
             MatchToken::Node("KWImport".to_string()),
             MatchToken::Node("KWFunction".to_string()),
             MatchToken::Node("KWClass".to_string()),
+            MatchToken::Node("KWUse".to_string()),
             MatchToken::Node("KWEnum".to_string()),
         ],
     };
@@ -462,10 +466,15 @@ pub fn gen_parser() -> Parser {
                 parameters: vec![Parameters::Set("root".to_string())],
             },
             // then it can be a path
-            Rule::Is {
-                token: MatchToken::Node("use_path".to_string()),
-                rules: vec![],
-                parameters: vec![Parameters::Set("path".to_string())],
+            Rule::Maybe {
+                token: MatchToken::Token(TokenKinds::Token(".".to_string())),
+                is: vec![Rule::Is {
+                    token: MatchToken::Node("use_path".to_string()),
+                    rules: vec![],
+                    parameters: vec![Parameters::Set("path".to_string())],
+                }],
+                isnt: vec![],
+                parameters: vec![],
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token(";".to_string())),
@@ -484,16 +493,6 @@ pub fn gen_parser() -> Parser {
         rules: vec![
             Rule::Loop {
                 rules: vec![
-                    Rule::Maybe {
-                        token: MatchToken::Token(TokenKinds::Token(".".to_string())),
-                        is: vec![],
-                        isnt: vec![/*Rule::Command {
-                            command: Commands::Goto {
-                                label: "end_path".to_string(),
-                            },
-                        }*/],
-                        parameters: vec![],
-                    },
                     Rule::IsOneOf {
                         tokens: vec![
                             OneOf {
@@ -508,24 +507,32 @@ pub fn gen_parser() -> Parser {
                             },
                             OneOf {
                                 token: MatchToken::Node("use_multiple_paths".to_string()),
-                                rules: vec![
-                                    /*Rule::Command {
-                                        command: Commands::Goto {
-                                            label: "end_path".to_string(),
-                                        },
-                                    },*/
-                                ],
+                                rules: vec![Rule::Command {
+                                    command: Commands::Goto {
+                                        label: "end_path".to_string(),
+                                    },
+                                }],
                                 parameters: vec![Parameters::Set("path".to_string())],
                             },
                         ],
                     },
+                    Rule::Maybe {
+                        token: MatchToken::Token(TokenKinds::Token(".".to_string())),
+                        is: vec![],
+                        isnt: vec![Rule::Command {
+                            command: Commands::Goto {
+                                label: "end_path".to_string(),
+                            },
+                        }],
+                        parameters: vec![],
+                    },
                 ],
             },
-            /*Rule::Command {
-                command: Commands::Goto {
-                    label: "end_path".to_string(),
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end_path".to_string(),
                 },
-            },*/
+            },
         ],
         variables,
     };
@@ -1040,9 +1047,26 @@ pub fn gen_parser() -> Parser {
     variables.insert("body".to_string(), grammar::VariableKind::Node);
     variables.insert("tail".to_string(), grammar::VariableKind::Node);
     variables.insert("refs".to_string(), grammar::VariableKind::Node);
+    variables.insert("alloc".to_string(), grammar::VariableKind::Boolean);
+    variables.insert("dealloc".to_string(), grammar::VariableKind::Boolean);
     let value = Node {
         name: "value".to_string(),
         rules: vec![
+            Rule::MaybeOneOf {
+                is_one_of: vec![
+                    OneOf {
+                        token: MatchToken::Word("new".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::True("alloc".to_string())],
+                    },
+                    OneOf {
+                        token: MatchToken::Word("delete".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::True("dealloc".to_string())],
+                    },
+                ],
+                isnt: vec![],
+            },
             Rule::While {
                 token: MatchToken::Enumerator("unary_operators".to_string()),
                 rules: vec![],
@@ -2237,6 +2261,8 @@ mod tests {
         let test_string = r##"
 import "#io"
 
+use io.print.{ahoj.{sedm.*}, *};
+
 /// danda Římani
 /// utf8 je zlo na této planetě
 pub fun main((a, b): (int, int)) {
@@ -2308,7 +2334,7 @@ pub enum A {
 
     fun new() {
         let option1 = A.c(5, (5, 5.5));
-        let option2 = A.c:{
+        let option2 = new A.c:{
             first: 5,
             second: (5, 5.5),
         };
