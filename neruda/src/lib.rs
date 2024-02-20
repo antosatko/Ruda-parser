@@ -257,15 +257,15 @@ pub fn gen_parser() -> Parser {
             MatchToken::Word("let".to_string()),
             MatchToken::Word("enum".to_string()),
             MatchToken::Word("class".to_string()),
+            MatchToken::Word("delete".to_string()),
+            MatchToken::Word("new".to_string()),
             // todo:
             MatchToken::Word("impl".to_string()),
             MatchToken::Word("const".to_string()),
             MatchToken::Word("trait".to_string()),
             MatchToken::Word("type".to_string()),
             MatchToken::Word("as".to_string()),
-            MatchToken::Word("delete".to_string()),
             MatchToken::Word("switch".to_string()),
-            MatchToken::Word("new".to_string()),
             // in consideration:
             MatchToken::Word("error".to_string()),
             MatchToken::Word("try".to_string()),
@@ -403,10 +403,11 @@ pub fn gen_parser() -> Parser {
     let entry_nodes = Enumerator {
         name: "entry_nodes".to_string(),
         values: vec![
-            MatchToken::Node("KWImport".to_string()),
             MatchToken::Node("KWFunction".to_string()),
             MatchToken::Node("KWClass".to_string()),
             MatchToken::Node("KWUse".to_string()),
+            MatchToken::Node("KWImport".to_string()),
+            MatchToken::Node("KWType".to_string()),
             MatchToken::Node("KWEnum".to_string()),
         ],
     };
@@ -679,18 +680,19 @@ pub fn gen_parser() -> Parser {
     let block_line = Enumerator {
         name: "block_line".to_string(),
         values: vec![
-            MatchToken::Node("KWFunction".to_string()),
-            MatchToken::Node("KWImport".to_string()),
-            MatchToken::Node("KWLet".to_string()),
             MatchToken::Node("KWIf".to_string()),
-            MatchToken::Node("KWWhile".to_string()),
+            MatchToken::Node("KWLet".to_string()),
             MatchToken::Node("KWFor".to_string()),
-            MatchToken::Node("KWClass".to_string()),
             MatchToken::Node("KWLoop".to_string()),
+            MatchToken::Node("KWWhile".to_string()),
             MatchToken::Node("KWEnum".to_string()),
             MatchToken::Node("KWReturn".to_string()),
-            MatchToken::Node("KWBreak".to_string()),
             MatchToken::Node("KWContinue".to_string()),
+            MatchToken::Node("KWType".to_string()),
+            MatchToken::Node("KWBreak".to_string()),
+            MatchToken::Node("KWClass".to_string()),
+            MatchToken::Node("KWImport".to_string()),
+            MatchToken::Node("KWFunction".to_string()),
             MatchToken::Node("statement".to_string()),
             MatchToken::Token(TokenKinds::Token(";".to_string())),
         ],
@@ -2223,6 +2225,48 @@ pub fn gen_parser() -> Parser {
         .nodes
         .insert(enum_variant.name.clone(), enum_variant);
 
+    let mut variables = Map::new();
+    variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("type".to_string(), grammar::VariableKind::Node);
+    let kw_type = Node {
+        name: "KWType".to_string(),
+        rules: vec![
+            Rule::While {
+                token: MatchToken::Token(TokenKinds::Complex("doc_comment".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::Set("docs".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Word("type".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![Parameters::Set("identifier".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("=".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+            Rule::Is {
+                token: MatchToken::Enumerator("types".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("type".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(";".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(kw_type.name.clone(), kw_type);
+
     // keeps track of all the imported files for faster lookup
     parser
         .grammar
@@ -2326,17 +2370,23 @@ class Danda {
 pub enum A {
     a; // = 0
     b = 7;
-    c(
+    c{
         /// První parametr
         first: int;
         second: &(int, float);
-    ) = 5;
+    } = 5;
+
+    d{a: char};
 
     fun new() {
         let option1 = A.c(5, (5, 5.5));
         let option2 = new A.c:{
             first: 5,
             second: (5, 5.5),
+        };
+        let danda = A.d(9c);
+        let danda2 = A.d:{
+            a: 9c,
         };
         return option1;
     }
