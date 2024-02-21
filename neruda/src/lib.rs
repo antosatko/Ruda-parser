@@ -1,3 +1,5 @@
+pub mod ast;
+
 extern crate alloc;
 use alloc::string::*;
 use alloc::vec;
@@ -7,6 +9,8 @@ type Map = std::collections::HashMap<String, VariableKind>;
 use rparse::grammar;
 use rparse::{grammar::*, lexer::*, Parser};
 
+
+/// Generates a grammar for Neruda programming language
 pub fn gen_parser() -> Parser {
     let mut parser = Parser::new();
 
