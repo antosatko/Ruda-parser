@@ -581,6 +581,7 @@ pub fn gen_parser() -> Parser {
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
     variables.insert("parameters".to_string(), grammar::VariableKind::NodeList);
     variables.insert("return_type".to_string(), grammar::VariableKind::Node);
+    variables.insert("generic".to_string(), grammar::VariableKind::Node);
     variables.insert("body".to_string(), grammar::VariableKind::Node);
     variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
     variables.insert("public".to_string(), grammar::VariableKind::Boolean);
@@ -607,6 +608,12 @@ pub fn gen_parser() -> Parser {
                 token: MatchToken::Token(TokenKinds::Text),
                 rules: vec![],
                 parameters: vec![Parameters::Set("identifier".to_string())],
+            },
+            Rule::Maybe {
+                token: MatchToken::Node("generic_declaration".to_string()),
+                is: vec![],
+                isnt: vec![],
+                parameters: vec![Parameters::Set("generic".to_string())],
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token("(".to_string())),
@@ -748,6 +755,7 @@ pub fn gen_parser() -> Parser {
     let mut variables = Map::new();
     variables.insert("refs".to_string(), grammar::VariableKind::Number);
     variables.insert("path".to_string(), grammar::VariableKind::Node);
+    variables.insert("generic".to_string(), grammar::VariableKind::Node);
     let type_ = Node {
         name: "type".to_string(),
         rules: vec![
@@ -784,6 +792,12 @@ pub fn gen_parser() -> Parser {
                 token: MatchToken::Node("path".to_string()),
                 rules: vec![],
                 parameters: vec![Parameters::Set("path".to_string())],
+            },
+            Rule::Maybe {
+                token: MatchToken::Node("generic_expression".to_string()),
+                is: vec![],
+                isnt: vec![],
+                parameters: vec![Parameters::Set("generic".to_string())],
             },
         ],
         variables,
@@ -1565,6 +1579,7 @@ pub fn gen_parser() -> Parser {
 
     let mut variables = Map::new();
     variables.insert("arguments".to_string(), grammar::VariableKind::Node);
+    variables.insert("generic".to_string(), grammar::VariableKind::Node);
     let call = Node {
         name: "call".to_string(),
         rules: vec![
@@ -1572,6 +1587,12 @@ pub fn gen_parser() -> Parser {
                 token: MatchToken::Token(TokenKinds::Token("(".to_string())),
                 rules: vec![],
                 parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Maybe {
+                token: MatchToken::Node("generic_expression".to_string()),
+                is: vec![],
+                isnt: vec![],
+                parameters: vec![Parameters::Set("generic".to_string())],
             },
             Rule::Is {
                 token: MatchToken::Node("values_list".to_string()),
@@ -2005,6 +2026,7 @@ pub fn gen_parser() -> Parser {
     let mut variables = Map::new();
     variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("generic".to_string(), grammar::VariableKind::Node);
     variables.insert("members".to_string(), grammar::VariableKind::NodeList);
     variables.insert("public".to_string(), grammar::VariableKind::Boolean);
     let kw_class = Node {
@@ -2030,6 +2052,12 @@ pub fn gen_parser() -> Parser {
                 token: MatchToken::Token(TokenKinds::Text),
                 rules: vec![],
                 parameters: vec![Parameters::Set("identifier".to_string())],
+            },
+            Rule::Maybe {
+                token: MatchToken::Node("generic_declaration".to_string()),
+                is: vec![],
+                isnt: vec![],
+                parameters: vec![Parameters::Set("generic".to_string())],
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token("{".to_string())),
@@ -2267,6 +2295,155 @@ pub fn gen_parser() -> Parser {
     };
     parser.grammar.nodes.insert(kw_type.name.clone(), kw_type);
 
+    let mut variables = Map::new();
+    variables.insert("identifiers".to_string(), VariableKind::NodeList);
+    let generic_declaration = Node {
+        name: "generic_declaration".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("<".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Node("generic_ident_declaration".to_string()),
+                rules: vec![Rule::While {
+                    token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                    rules: vec![Rule::Maybe {
+                        token: MatchToken::Node("generic_ident_declaration".to_string()),
+                        is: vec![],
+                        isnt: vec![Rule::Command {
+                            command: Commands::Goto {
+                                label: "end".to_string(),
+                            },
+                        }],
+                        parameters: vec![Parameters::Set("identifiers".to_string())],
+                    }],
+                    parameters: vec![],
+                }],
+                parameters: vec![Parameters::Set("identifiers".to_string())],
+            },
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end".to_string(),
+                },
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(">".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(generic_declaration.name.clone(), generic_declaration);
+
+    let mut variables = Map::new();
+    variables.insert("identifier".to_string(), VariableKind::Node);
+    variables.insert("traits".to_string(), VariableKind::NodeList);
+    let generic_ident_declaration = Node {
+        name: "generic_ident_declaration".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![
+                    Parameters::HardError(true),
+                    Parameters::Set("identifier".to_string()),
+                ],
+            },
+            Rule::Maybe {
+                token: MatchToken::Token(TokenKinds::Token("(".to_string())),
+                is: vec![
+                    Rule::Is {
+                        token: MatchToken::Node("path".to_string()),
+                        rules: vec![Rule::While {
+                            token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                            rules: vec![Rule::Maybe {
+                                token: MatchToken::Node("path".to_string()),
+                                is: vec![],
+                                isnt: vec![Rule::Command {
+                                    command: Commands::Goto {
+                                        label: "end".to_string(),
+                                    },
+                                }],
+                                parameters: vec![Parameters::Set("traits".to_string())],
+                            }],
+                            parameters: vec![],
+                        }],
+                        parameters: vec![Parameters::Set("traits".to_string())],
+                    },
+                    Rule::Command {
+                        command: Commands::Label {
+                            name: "end".to_string(),
+                        },
+                    },
+                    Rule::Is {
+                        token: MatchToken::Token(TokenKinds::Token(")".to_string())),
+                        rules: vec![],
+                        parameters: vec![],
+                    },
+                ],
+                isnt: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(
+        generic_ident_declaration.name.clone(),
+        generic_ident_declaration,
+    );
+
+    let mut variables = Map::new();
+    variables.insert("types".to_string(), VariableKind::NodeList);
+    let generic_expression = Node {
+        name: "generic_expression".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("<".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Enumerator("types".to_string()),
+                rules: vec![Rule::While {
+                    token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                    rules: vec![Rule::Maybe {
+                        token: MatchToken::Enumerator("types".to_string()),
+                        is: vec![],
+                        isnt: vec![Rule::Command {
+                            command: Commands::Goto {
+                                label: "end".to_string(),
+                            },
+                        }],
+                        parameters: vec![Parameters::Set("types".to_string())],
+                    }],
+                    parameters: vec![],
+                }],
+                parameters: vec![Parameters::Set("types".to_string())],
+            },
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end".to_string(),
+                },
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(">".to_string())),
+                rules: vec![],
+                parameters: vec![],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(generic_expression.name.clone(), generic_expression);
+
     // keeps track of all the imported files for faster lookup
     parser
         .grammar
@@ -2309,7 +2486,7 @@ use io.print.{ahoj.{sedm.*}, *};
 
 /// danda Římani
 /// utf8 je zlo na této planetě
-pub fun main((a, b): (int, int)) {
+pub fun main<T(DandaLegenda, core.ToString,), sedm, >((a, b): (int, int)) {
     io.přiňtLnffž("Hello, World!", 600. + (9, 8, "ble",), Danda:{
         a: !!!!!!!!!!!!!!!!!!!!!!!!!!!!5c,
         b: 6f,
@@ -2328,7 +2505,7 @@ pub fun main((a, b): (int, int)) {
                 );
     });
 
-    let a: int = fun (a:int): int {
+    let a: int = fun (a:int<samba>): int {
         a + 5;
     }(5);
 
@@ -2358,10 +2535,11 @@ fun sum_array(numbers: &[&&&int]): int {}
 /// Tahleta třída je pro testování
 /// 
 /// Ať tě ani nenapadne ji použít
-class Danda {
+class Danda<T> {
     a: int;
     b: int;
     c: int;
+    idk: T;
     fun sum(a: int, b: char): int {
         a + b + !**5c;
     }
@@ -2370,13 +2548,11 @@ class Danda {
 pub enum A {
     a; // = 0
     b = 7;
-    c{
+    c(
         /// První parametr
         first: int;
         second: &(int, float);
-    } = 5;
-
-    d{a: char};
+    ) = 5;
 
     fun new() {
         let option1 = A.c(5, (5, 5.5));
