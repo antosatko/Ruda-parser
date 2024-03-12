@@ -9,7 +9,6 @@ type Map = std::collections::HashMap<String, VariableKind>;
 use rparse::grammar;
 use rparse::{grammar::*, lexer::*, Parser};
 
-
 /// Generates a grammar for Neruda programming language
 pub fn gen_parser() -> Parser {
     let mut parser = Parser::new();
@@ -717,9 +716,15 @@ pub fn gen_parser() -> Parser {
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
     variables.insert("type".to_string(), grammar::VariableKind::Node);
     variables.insert("rest".to_string(), grammar::VariableKind::Boolean);
+    variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
     let type_specifier = Node {
         name: "parameter".to_string(),
         rules: vec![
+            Rule::While {
+                token: MatchToken::Token(TokenKinds::Complex("doc_comment".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::Set("docs".to_string())],
+            },
             Rule::Maybe {
                 token: MatchToken::Token(TokenKinds::Token(".".to_string())),
                 is: vec![Rule::Is {
@@ -1261,9 +1266,10 @@ pub fn gen_parser() -> Parser {
                         token: MatchToken::Node("tuple_parameter".to_string()),
                         rules: vec![Rule::While {
                             token: MatchToken::Token(TokenKinds::Token(",".to_string())),
-                            rules: vec![Rule::Is {
-                                token: MatchToken::Enumerator("parameter_idents".to_string()),
-                                rules: vec![],
+                            rules: vec![Rule::Maybe {
+                                token: MatchToken::Node("tuple_parameter".to_string()),
+                                is: vec![],
+                                isnt: vec![],
                                 parameters: vec![Parameters::Set("identifiers".to_string())],
                             }],
                             parameters: vec![],
@@ -1271,6 +1277,11 @@ pub fn gen_parser() -> Parser {
                         parameters: vec![Parameters::Set("identifiers".to_string())],
                     },
                 ],
+            },
+            Rule::Command {
+                command: Commands::Label {
+                    name: "end".to_string(),
+                },
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token(")".to_string())),
@@ -1619,11 +1630,11 @@ pub fn gen_parser() -> Parser {
         name: "values_list".to_string(),
         rules: vec![
             Rule::Maybe {
-                token: MatchToken::Enumerator("expressions".to_string()),
+                token: MatchToken::Enumerator("list_values".to_string()),
                 is: vec![Rule::While {
                     token: MatchToken::Token(TokenKinds::Token(",".to_string())),
                     rules: vec![Rule::Maybe {
-                        token: MatchToken::Enumerator("expressions".to_string()),
+                        token: MatchToken::Enumerator("list_values".to_string()),
                         is: vec![],
                         isnt: vec![Rule::Command {
                             command: Commands::Goto {
@@ -1652,6 +1663,47 @@ pub fn gen_parser() -> Parser {
         .grammar
         .nodes
         .insert(values_list.name.clone(), values_list);
+
+    let mut variables = Map::new();
+    variables.insert("identifier".to_string(), grammar::VariableKind::Node);
+    variables.insert("expression".to_string(), grammar::VariableKind::Node);
+    let named_expression = Node {
+        name: "named_expression".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Text),
+                rules: vec![],
+                parameters: vec![Parameters::Set("identifier".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(":".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
+            },
+            Rule::Is {
+                token: MatchToken::Enumerator("expressions".to_string()),
+                rules: vec![],
+                parameters: vec![Parameters::Set("expression".to_string())],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(named_expression.name.clone(), named_expression);
+
+    let list_values = Enumerator {
+        name: "list_values".to_string(),
+        values: vec![
+            MatchToken::Enumerator("expressions".to_string()),
+            MatchToken::Node("named_expression".to_string()),
+        ],
+    };
+    parser
+        .grammar
+        .enumerators
+        .insert(list_values.name.clone(), list_values);
 
     let mut variables = Map::new();
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
@@ -2200,7 +2252,7 @@ pub fn gen_parser() -> Parser {
     variables.insert("docs".to_string(), grammar::VariableKind::NodeList);
     variables.insert("identifier".to_string(), grammar::VariableKind::Node);
     variables.insert("value".to_string(), grammar::VariableKind::Node);
-    variables.insert("fields".to_string(), grammar::VariableKind::NodeList);
+    variables.insert("parameters".to_string(), grammar::VariableKind::NodeList);
     let enum_variant = Node {
         name: "enum_variant".to_string(),
         rules: vec![
@@ -2220,10 +2272,19 @@ pub fn gen_parser() -> Parser {
             Rule::Maybe {
                 token: MatchToken::Token(TokenKinds::Token("(".to_string())),
                 is: vec![
-                    Rule::While {
-                        token: MatchToken::Node("class_field".to_string()),
-                        rules: vec![],
-                        parameters: vec![Parameters::Set("fields".to_string())],
+                    Rule::Maybe {
+                        token: MatchToken::Node("parameter".to_string()),
+                        is: vec![Rule::While {
+                            token: MatchToken::Token(TokenKinds::Token(",".to_string())),
+                            rules: vec![Rule::Is {
+                                token: MatchToken::Node("parameter".to_string()),
+                                rules: vec![],
+                                parameters: vec![Parameters::Set("parameters".to_string())],
+                            }],
+                            parameters: vec![],
+                        }],
+                        isnt: vec![],
+                        parameters: vec![Parameters::Set("parameters".to_string())],
                     },
                     Rule::Is {
                         token: MatchToken::Token(TokenKinds::Token(")".to_string())),
@@ -2485,6 +2546,8 @@ mod tests {
 
         let test_string = r##"
 import "#io"
+import "%resource_server"
+import "ahoj.nrd"
 
 use io.print.{ahoj.{sedm.*}, *};
 
@@ -2553,10 +2616,11 @@ pub enum A {
     a; // = 0
     b = 7;
     c(
-        /// První parametr
-        first: int;
-        second: &(int, float);
-    ) = 5;
+        /// some comment
+        a: int,
+        /// todo: fix trailing comma error
+        a: float
+    ) = 9;
 
     fun new() {
         let option1 = A.c(5, (5, 5.5));
@@ -2570,6 +2634,14 @@ pub enum A {
         };
         return option1;
     }
+}
+
+fun nevim(a: int, b: int): int {
+    a + b;
+}
+
+fun nevim2(): int {
+    nevim(b: 5, a: 5);
 }
 
 
@@ -2588,13 +2660,16 @@ pub enum A {
         let start = std::time::Instant::now();
 
         //println!("{:?}", tokens.as_ref().unwrap());
-        let ast = parser.parse(&tokens, test_string);
+        let tree = parser.parse(&tokens, test_string).unwrap();
         println!("Parser took: {:?}", start.elapsed());
 
         let str = serde_json::to_string(&parser).unwrap();
         let mut file = std::fs::File::create("ruda_grammar.json").unwrap();
         file.write_all(str.as_bytes()).unwrap();
 
-        panic!("{:?}", ast.unwrap());
+        let imports = ast::find_imports(&tree, &test_string);
+        println!("imports: {:?}", imports);
+
+        panic!("{:?}", "tree");
     }
 }
