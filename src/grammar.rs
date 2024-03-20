@@ -130,6 +130,7 @@ pub enum Rule {
     ///
     /// The command will be executed without matching a token
     Command { command: Commands },
+    Debug { target: Option<String> },
 }
 
 /// One of the tokens that will be matched
@@ -546,6 +547,20 @@ pub mod validator {
                     }
                     Commands::Print { message: _ } => (),
                 },
+                Rule::Debug { target } => {
+                    match target {
+                        Some(name) => match node.variables.get(name) {
+                            Some(_) => (),
+                            None => {
+                                result.errors.push(ValidationError {
+                                    kind: ValidationErrors::VariableNotFound(name.clone()),
+                                    node_name: node.name.clone(),
+                                });
+                            }
+                        },
+                        None => (),
+                    }
+                }
             }
         }
 
@@ -986,6 +1001,7 @@ pub mod validator {
     }
 
     /// This is a structure that keeps track of things that are hard to find
+    #[derive(Debug)]
     pub struct LostAndFound {
         pub lost_labels: Vec<String>,
         pub found_labels: Vec<String>,

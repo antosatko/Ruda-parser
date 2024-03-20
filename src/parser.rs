@@ -780,7 +780,7 @@ impl Parser {
                     }
                     grammar::Commands::Label { name: _ } => (),
                     grammar::Commands::Print { message: _msg } => {
-                        #[cfg(feature = "debug")]
+                        #[cfg(feature = "std")]
                         println!("{}", _msg)
                     }
                 },
@@ -880,6 +880,34 @@ impl Parser {
                             &tokens[cursor.idx].location,
                             Some(node.clone()),
                         )?;
+                    }
+                }
+                grammar::Rule::Debug { target } => {
+                    #[cfg(feature = "std")]
+                    {
+                        match target {
+                            Some(ident) => {
+                                let kind = match node.variables.get(ident) {
+                                    Some(kind) => kind,
+                                    None => {
+                                        return Err(ParseError {
+                                            kind: ParseErrors::VariableNotFound(ident.to_string()),
+                                            location: tokens[cursor.idx].location.clone(),
+                                            node: Some(node.clone()),
+                                        })
+                                    }
+                                };
+                                println!("{:?}", kind);
+                            }
+                            None => {
+                                if cursor.idx >= tokens.len() {
+                                    println!("Eof");
+                                } else {
+                                    println!("{:?}", lexer.stringify(&tokens[cursor.idx], text));
+                                }
+                            }
+                        }
+                        
                     }
                 }
             }
@@ -1131,12 +1159,12 @@ impl Parser {
                     };
                 }
                 grammar::Parameters::Print(_str) => {
-                    #[cfg(feature = "debug")]
+                    #[cfg(feature = "std")]
                     println!("{}", _str)
                 }
                 grammar::Parameters::Debug(variable) => match variable {
                     Some(_ident) => {
-                        #[cfg(feature = "debug")]
+                        #[cfg(feature = "std")]
                         {
                             let kind = match node.variables.get(_ident) {
                                 Some(kind) => kind,
@@ -1153,11 +1181,11 @@ impl Parser {
                     }
                     None =>
                     {
-                        #[cfg(feature = "debug")]
+                        #[cfg(feature = "std")]
                         if cursor.idx >= tokens.len() {
                             println!("Eof");
                         } else {
-                            println!("{:?}", lexer.stringify(&tokens[cursor.idx], text));
+                            println!("{:?}", _lexer.stringify(&tokens[cursor.idx], _text));
                         }
                     }
                 },

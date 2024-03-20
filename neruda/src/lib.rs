@@ -1113,7 +1113,7 @@ pub fn gen_parser() -> Parser {
                         ],
                     },
                     OneOf {
-                        token: MatchToken::Node("path".to_string()),
+                        token: MatchToken::Token(TokenKinds::Text),
                         rules: vec![],
                         parameters: vec![
                             Parameters::Set("body".to_string()),
@@ -1138,16 +1138,35 @@ pub fn gen_parser() -> Parser {
                     },
                 ],
             },
-            Rule::Maybe {
-                token: MatchToken::Enumerator("tail_options".to_string()),
-                is: vec![],
-                isnt: vec![],
+            Rule::Is {
+                token: MatchToken::Node("tail".to_string()),
+                rules: vec![],
                 parameters: vec![Parameters::Set("tail".to_string())],
             },
         ],
         variables,
     };
     parser.grammar.nodes.insert(value.name.clone(), value);
+
+    let mut variables = Map::new();
+    variables.insert("amount".to_string(), grammar::VariableKind::Number);
+    let tail_derefs = Node {
+        name: "tail_derefs".to_string(),
+        rules: vec![
+            Rule::While {
+                token: MatchToken::Token(TokenKinds::Token("*".to_string())),
+                rules: vec![],
+                parameters: vec![
+                    Parameters::Increment("amount".to_string()),
+                ],
+            },
+        ],
+        variables,
+    };
+    parser
+        .grammar
+        .nodes
+        .insert(tail_derefs.name.clone(), tail_derefs);
 
     let mut variables = Map::new();
     variables.insert("parameters".to_string(), grammar::VariableKind::NodeList);
@@ -1277,11 +1296,6 @@ pub fn gen_parser() -> Parser {
                         parameters: vec![Parameters::Set("identifiers".to_string())],
                     },
                 ],
-            },
-            Rule::Command {
-                command: Commands::Label {
-                    name: "end".to_string(),
-                },
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token(")".to_string())),
@@ -1448,7 +1462,7 @@ pub fn gen_parser() -> Parser {
     let tail_options = Enumerator {
         name: "tail_options".to_string(),
         values: vec![
-            MatchToken::Node("field".to_string()),
+            MatchToken::Node("tail_dot".to_string()),
             MatchToken::Node("index".to_string()),
             MatchToken::Node("call".to_string()),
             MatchToken::Node("instance".to_string()),
@@ -1458,6 +1472,19 @@ pub fn gen_parser() -> Parser {
         .grammar
         .enumerators
         .insert(tail_options.name.clone(), tail_options);
+
+    let mut variables = Map::new();
+    variables.insert("tail".to_string(), grammar::VariableKind::NodeList);
+    let tail = Node {
+        name: "tail".to_string(),
+        rules: vec![Rule::While {
+            token: MatchToken::Enumerator("tail_options".to_string()),
+            rules: vec![],
+            parameters: vec![Parameters::Set("tail".to_string())],
+        }],
+        variables,
+    };
+    parser.grammar.nodes.insert(tail.name.clone(), tail);
 
     let mut variables = Map::new();
     variables.insert("fields".to_string(), grammar::VariableKind::NodeList);
@@ -1542,30 +1569,51 @@ pub fn gen_parser() -> Parser {
 
     let mut variables = Map::new();
     variables.insert("field".to_string(), grammar::VariableKind::Node);
-    variables.insert("next".to_string(), grammar::VariableKind::Node);
     let field = Node {
         name: "field".to_string(),
         rules: vec![
             Rule::Is {
-                token: MatchToken::Token(TokenKinds::Token(".".to_string())),
-                rules: vec![],
-                parameters: vec![Parameters::HardError(true)],
-            },
-            Rule::Is {
                 token: MatchToken::Token(TokenKinds::Text),
                 rules: vec![],
-                parameters: vec![Parameters::Set("field".to_string())],
-            },
-            Rule::Maybe {
-                token: MatchToken::Enumerator("tail_options".to_string()),
-                is: vec![],
-                isnt: vec![],
-                parameters: vec![Parameters::Set("next".to_string())],
+                parameters: vec![
+                    Parameters::Set("field".to_string()),
+                ],
             },
         ],
         variables,
     };
     parser.grammar.nodes.insert(field.name.clone(), field);
+
+    let mut variables = Map::new();
+    variables.insert("node".to_string(), grammar::VariableKind::Node);
+    let tail_dot = Node {
+        name: "tail_dot".to_string(),
+        rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token(".".to_string())),
+                rules: vec![],
+                parameters: vec![
+                    Parameters::HardError(true),
+                ],
+            },
+            Rule::IsOneOf {
+                tokens: vec![
+                    OneOf {
+                        token: MatchToken::Node("field".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("node".to_string())],
+                    },
+                    OneOf {
+                        token: MatchToken::Node("tail_derefs".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("node".to_string())],
+                    },
+                ],
+            },
+        ],
+        variables,
+    };
+    parser.grammar.nodes.insert(tail_dot.name.clone(), tail_dot);
 
     let mut variables = Map::new();
     variables.insert("index".to_string(), grammar::VariableKind::Node);
@@ -2637,7 +2685,7 @@ pub enum A {
 }
 
 fun nevim(a: int, b: int): int {
-    a + b;
+    a + b().f.f.***;
 }
 
 fun nevim2(): int {
