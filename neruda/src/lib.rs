@@ -1052,7 +1052,10 @@ pub fn gen_parser() -> Parser {
             Rule::Is {
                 token: MatchToken::Enumerator("expressions".to_string()),
                 rules: vec![],
-                parameters: vec![Parameters::Set("expression".to_string())],
+                parameters: vec![
+                    Parameters::Set("expression".to_string()),
+                    Parameters::HardError(true),
+                ],
             },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token(";".to_string())),
@@ -1153,12 +1156,15 @@ pub fn gen_parser() -> Parser {
     let tail_derefs = Node {
         name: "tail_derefs".to_string(),
         rules: vec![
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("*".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::Increment("amount".to_string())],
+            },
             Rule::While {
                 token: MatchToken::Token(TokenKinds::Token("*".to_string())),
                 rules: vec![],
-                parameters: vec![
-                    Parameters::Increment("amount".to_string()),
-                ],
+                parameters: vec![Parameters::Increment("amount".to_string())],
             },
         ],
         variables,
@@ -1465,7 +1471,6 @@ pub fn gen_parser() -> Parser {
             MatchToken::Node("tail_dot".to_string()),
             MatchToken::Node("index".to_string()),
             MatchToken::Node("call".to_string()),
-            MatchToken::Node("instance".to_string()),
         ],
     };
     parser
@@ -1491,11 +1496,7 @@ pub fn gen_parser() -> Parser {
     let instance = Node {
         name: "instance".to_string(),
         rules: vec![
-            Rule::Is {
-                token: MatchToken::Token(TokenKinds::Token(":".to_string())),
-                rules: vec![],
-                parameters: vec![Parameters::HardError(true)],
-            },
+            Rule::Debug { target: None },
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token("{".to_string())),
                 rules: vec![],
@@ -1571,15 +1572,11 @@ pub fn gen_parser() -> Parser {
     variables.insert("field".to_string(), grammar::VariableKind::Node);
     let field = Node {
         name: "field".to_string(),
-        rules: vec![
-            Rule::Is {
-                token: MatchToken::Token(TokenKinds::Text),
-                rules: vec![],
-                parameters: vec![
-                    Parameters::Set("field".to_string()),
-                ],
-            },
-        ],
+        rules: vec![Rule::Is {
+            token: MatchToken::Token(TokenKinds::Text),
+            rules: vec![],
+            parameters: vec![Parameters::Set("field".to_string())],
+        }],
         variables,
     };
     parser.grammar.nodes.insert(field.name.clone(), field);
@@ -1592,10 +1589,9 @@ pub fn gen_parser() -> Parser {
             Rule::Is {
                 token: MatchToken::Token(TokenKinds::Token(".".to_string())),
                 rules: vec![],
-                parameters: vec![
-                    Parameters::HardError(true),
-                ],
+                parameters: vec![Parameters::HardError(true)],
             },
+            Rule::Debug { target: None },
             Rule::IsOneOf {
                 tokens: vec![
                     OneOf {
@@ -1605,6 +1601,11 @@ pub fn gen_parser() -> Parser {
                     },
                     OneOf {
                         token: MatchToken::Node("tail_derefs".to_string()),
+                        rules: vec![],
+                        parameters: vec![Parameters::Set("node".to_string())],
+                    },
+                    OneOf {
+                        token: MatchToken::Node("instance".to_string()),
                         rules: vec![],
                         parameters: vec![Parameters::Set("node".to_string())],
                     },
@@ -1646,16 +1647,16 @@ pub fn gen_parser() -> Parser {
     let call = Node {
         name: "call".to_string(),
         rules: vec![
-            Rule::Is {
-                token: MatchToken::Token(TokenKinds::Token("(".to_string())),
-                rules: vec![],
-                parameters: vec![Parameters::HardError(true)],
-            },
             Rule::Maybe {
                 token: MatchToken::Node("generic_expression".to_string()),
                 is: vec![],
                 isnt: vec![],
                 parameters: vec![Parameters::Set("generic".to_string())],
+            },
+            Rule::Is {
+                token: MatchToken::Token(TokenKinds::Token("(".to_string())),
+                rules: vec![],
+                parameters: vec![Parameters::HardError(true)],
             },
             Rule::Is {
                 token: MatchToken::Node("values_list".to_string()),
@@ -1744,8 +1745,8 @@ pub fn gen_parser() -> Parser {
     let list_values = Enumerator {
         name: "list_values".to_string(),
         values: vec![
-            MatchToken::Enumerator("expressions".to_string()),
             MatchToken::Node("named_expression".to_string()),
+            MatchToken::Enumerator("expressions".to_string()),
         ],
     };
     parser
@@ -2594,7 +2595,7 @@ mod tests {
 
         let test_string = r##"
 import "#io"
-import "%resource_server"
+import "#resource_server"
 import "ahoj.nrd"
 
 use io.print.{ahoj.{sedm.*}, *};
@@ -2602,7 +2603,7 @@ use io.print.{ahoj.{sedm.*}, *};
 /// danda Římani
 /// utf8 je zlo na této planetě
 pub fun main<T(DandaLegenda, core.ToString,), sedm, >((a, b): (int, int)) {
-    io.přiňtLnffž("Hello, World!", 600. + (9, 8, "ble",), Danda:{
+    io.přiňtLnffž("Hello, World!", 600. + (9, 8, "ble",), Danda.{
         a: !!!!!!!!!!!!!!!!!!!!!!!!!!!!5c,
         b: 6f,
         c: [10, 20, **&&&30,],
@@ -2637,6 +2638,7 @@ pub fun main<T(DandaLegenda, core.ToString,), sedm, >((a, b): (int, int)) {
             break :var_a: 5c;
         };
         while true {
+
             break;
         }
     };
@@ -2672,21 +2674,23 @@ pub enum A {
 
     fun new() {
         let option1 = A.c(5, (5, 5.5));
-        let option2 = new A.c:{
+        let option2 = new A.c.{
             first: 5,
             second: (5, 5.5),
         };
         let danda = A.d(9c);
-        let danda2 = A.d:{
+        let danda2 = A.d.{
             a: 9c,
         };
         return option1;
     }
 }
 
+
 fun nevim(a: int, b: int): int {
-    a + b().f.f.***;
+    a + b().f.f.***([])[&i*i.**].{ž:():{!!&*6;}};
 }
+
 
 fun nevim2(): int {
     nevim(b: 5, a: 5);
